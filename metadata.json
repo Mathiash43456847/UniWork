@@ -1,0 +1,6 @@
+{
+  "name": "UniWork",
+  "description": "An integrated syllabus, calendar, and task manager for students and professionals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
