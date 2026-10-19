@@ -70,28 +70,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
   }
 ];
 
-const INITIAL_TASKS: Task[] = [
-  {
-    id: 'task-1',
-    title: 'Implement editable tags for calendar events',
-    description: 'Ensure custom colors and renaming are fully supported in the sidebar.',
-    date: getRelativeDateString(0),
-    startTime: '12:00',
-    endTime: '13:00',
-    status: 'done',
-    groupId: 'group-1',
-  },
-  {
-    id: 'task-2',
-    title: 'Sync calendar tasks with the Kanban board',
-    description: 'Double check that toggling checkboxes in either tab updates instantly.',
-    date: getRelativeDateString(0),
-    startTime: '15:00',
-    endTime: '16:00',
-    status: 'todo',
-    groupId: 'group-2',
-  }
-];
+const INITIAL_TASKS: Task[] = [];
 
 // Helper to parse path into valid ActiveTab
 function getTabFromPath(path: string): ActiveTab | null {

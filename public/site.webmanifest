@@ -1,0 +1,10 @@
+{
+  "name": "UniWork - Student Productivity & Study Planner",
+  "short_name": "UniWork",
+  "description": "Plan tasks, organise calendars and goals, join focus rooms, and track study progress.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070A11",
+  "theme_color": "#070A11",
+  "categories": ["education", "productivity"]
+}
