@@ -270,11 +270,15 @@ export default function CalendarView({
   // Auto-optimize default viewType based on device detection
   useEffect(() => {
     if (deviceType === 'Phone') {
-      setViewType('day');
+      if (viewType === 'week' || viewType === 'month') {
+        setViewType('day');
+      }
     } else if (deviceType === 'Tablet') {
-      setViewType('three-day');
+      if (viewType === 'week' || viewType === 'month') {
+        setViewType('three-day');
+      }
     }
-  }, [deviceType]);
+  }, [deviceType, viewType]);
 
   useEffect(() => {
     const checkDark = () => {
@@ -1055,7 +1059,9 @@ export default function CalendarView({
  
         {/* View Switchers: Day, 3 Days, Week, Month */}
         <div className="flex w-full md:w-auto bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60 justify-between md:justify-start overflow-x-auto scrollbar-none">
-          {(['day', 'three-day', 'week', 'month'] as CalendarViewType[]).map((v) => {
+          {((['day', 'three-day', 'week', 'month'] as CalendarViewType[])
+            .filter(v => deviceType !== 'Phone' || v === 'day')
+          ).map((v) => {
             const labels: Record<CalendarViewType, string> = {
               day: 'Day',
               'three-day': '3 Days',
@@ -1548,7 +1554,7 @@ export default function CalendarView({
                   }
                 }
 
-                const layoutData: Record<string, { left: string; width: string; top: number; height: number }> = {};
+                const layoutData: Record<string, { left: string; width: string; top: number; height: number; totalLanes: number }> = {};
 
                 for (const cluster of clusters) {
                   // Sort by startMin, then duration descending
@@ -1594,7 +1600,8 @@ export default function CalendarView({
                       left: leftStr,
                       width: widthStr,
                       top,
-                      height
+                      height,
+                      totalLanes
                     };
                   }
                 }
@@ -1717,12 +1724,14 @@ export default function CalendarView({
                         left: `calc(0% + ${fallbackHalfGap + 2}px)`,
                         width: `calc(100% - ${fallbackGap + 4}px)`,
                         top: colItem.startMin + fallbackHalfGap,
-                        height: Math.max(20, (colItem.endMin - colItem.startMin) - fallbackGap)
+                        height: Math.max(20, (colItem.endMin - colItem.startMin) - fallbackGap),
+                        totalLanes: 1
                       };
                       const topPx = itemPos.top;
                       const heightPx = itemPos.height;
                       const leftVal = itemPos.left;
                       const widthVal = itemPos.width;
+                      const totalLanes = itemPos.totalLanes || 1;
                       const isDragged = activeDragItem && activeDragItem.id === colItem.id && activeDragItem.type === colItem.type;
                       const isResized = activeResizeItem && activeResizeItem.id === colItem.id && activeResizeItem.type === colItem.type;
 
@@ -1808,11 +1817,36 @@ export default function CalendarView({
                                 <span className="text-xs md:text-[13px] font-bold leading-snug tracking-tight block truncate text-white">
                                   {ev.title}
                                 </span>
-                                <div className="flex items-center gap-1.5 text-[10px] md:text-[11px] font-medium font-sans tabular-nums text-white/85 mt-0.5 pointer-events-none select-none">
-                                  <Clock className="w-3 h-3 shrink-0 opacity-80" />
-                                  <span>{formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}</span>
-                                  <span className="opacity-50">·</span>
-                                  <span className="opacity-90 font-semibold">{formatDuration(colItem.startMin, colItem.endMin)}</span>
+                                {/* Adaptive time layout: single-line with ellipsis and no-wrap if wide, stacked cleanly if narrow */}
+                                <div className="mt-0.5 pointer-events-none select-none text-[10px] md:text-[11px] font-medium font-sans tabular-nums text-white/85 leading-tight">
+                                  {totalLanes > 1 || viewType === 'week' ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <Clock className="w-3 h-3 shrink-0 opacity-80" />
+                                        <span className="truncate whitespace-nowrap">
+                                          {formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}
+                                        </span>
+                                      </div>
+                                      <span className="text-[9.5px] md:text-[10px] text-white/75 font-normal pl-4 whitespace-nowrap">
+                                        {formatDuration(colItem.startMin, colItem.endMin)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                      <div className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                        <Clock className="w-3 h-3 shrink-0 opacity-80" />
+                                        <span>
+                                          {formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}
+                                        </span>
+                                      </div>
+                                      <div className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                        <span className="opacity-50">·</span>
+                                        <span className="opacity-90 font-semibold">
+                                          {formatDuration(colItem.startMin, colItem.endMin)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -1925,10 +1959,10 @@ export default function CalendarView({
                                     e.stopPropagation();
                                     if (onStartTask) onStartTask(task);
                                   }}
-                                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-[#0066FF] hover:bg-blue-700 text-white flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95 z-30 border border-white/20"
-                                  title="Running in Focus Timer"
+                                  className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md bg-[#0066FF] hover:bg-blue-700 text-white text-[10px] font-bold tracking-tight shadow-sm z-30 flex items-center justify-center whitespace-nowrap cursor-pointer transition border border-white/20 select-none"
+                                  title="Task Started - Click to open Focus Room"
                                 >
-                                  <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+                                  Task Started
                                 </button>
                               ) : isActivelyRunning ? (
                                 <button
@@ -1992,11 +2026,48 @@ export default function CalendarView({
 
                             {/* Time beneath title as quiet text (NO PILL BADGE) */}
                             {heightPx > 40 && (
-                              <div className="flex items-center gap-1.5 text-[10px] md:text-[11px] font-medium font-sans tabular-nums mt-0.5 pl-5.5 pointer-events-none select-none text-slate-500 dark:text-slate-400">
-                                <Clock className="w-3 h-3 shrink-0 opacity-70" />
-                                <span>{formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}</span>
-                                <span className="opacity-50">·</span>
-                                <span className="opacity-80 font-semibold">{formatDuration(colItem.startMin, colItem.endMin)}</span>
+                              <div className="mt-0.5 pl-5.5 pointer-events-none select-none text-[10px] md:text-[11px] font-medium font-sans tabular-nums text-slate-500 dark:text-slate-400 leading-tight">
+                                {totalLanes > 1 || viewType === 'week' ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <Clock className="w-3 h-3 shrink-0 opacity-70" />
+                                      <span className="truncate whitespace-nowrap">
+                                        {formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[9.5px] md:text-[10px] pl-4 whitespace-nowrap">
+                                      <span className="text-slate-400 dark:text-slate-500 font-normal">
+                                        {formatDuration(colItem.startMin, colItem.endMin)}
+                                      </span>
+                                      {isActivelyRunning && !completed && (
+                                        <span className="text-amber-500 dark:text-amber-400 font-bold">
+                                          · {Math.max(0, colItem.endMin - currentMin)}m left
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                    <div className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                      <Clock className="w-3 h-3 shrink-0 opacity-70" />
+                                      <span>
+                                        {formatTo12Hour(minutesToTimeString(colItem.startMin))} – {formatTo12Hour(minutesToTimeString(colItem.endMin))}
+                                      </span>
+                                    </div>
+                                    <div className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                                      <span className="opacity-50">·</span>
+                                      <span className="opacity-80 font-semibold">
+                                        {formatDuration(colItem.startMin, colItem.endMin)}
+                                      </span>
+                                    </div>
+                                    {isActivelyRunning && !completed && (
+                                      <div className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-amber-500 dark:text-amber-400 font-bold">
+                                        <span>·</span>
+                                        <span>{Math.max(0, colItem.endMin - currentMin)}m left</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             )}
 

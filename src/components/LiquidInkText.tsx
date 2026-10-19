@@ -15,6 +15,11 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const [fontLoaded, setFontLoaded] = useState(false);
 
+  // ... (existing font loading logic)
+
+  // In the render function, use fillProgressRef to mask the liquid canvas
+  // ...
+
   // Check when fonts are ready
   useEffect(() => {
     if (document.fonts) {
@@ -286,6 +291,7 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
         displayCtx.fillStyle = grad;
         displayCtx.fillRect(0, 0, pixelWidth, pixelHeight);
       }
+
 
       // Reset composite operation
       displayCtx.globalCompositeOperation = 'source-over';

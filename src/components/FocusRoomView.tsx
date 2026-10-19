@@ -38,6 +38,8 @@ interface FocusRoomViewProps {
   allTasks?: Task[];
   tags: Tag[];
   userId?: string;
+  isPreview?: boolean;
+  initialRoomCode?: string | null;
   onCompleteTask: (
     task: Task | null,
     timeDeltaMinutes: number,
@@ -68,11 +70,230 @@ export interface FocusRoomItem {
   peerCount: number;
 }
 
+export const DEFAULT_PREVIEW_ROOMS: FocusRoomItem[] = [
+  {
+    code: '000000',
+    name: 'Global Focus Room',
+    isGlobal: true,
+    creatorUserId: 'system',
+    peerCount: 8,
+  },
+  {
+    code: '204911',
+    name: 'Quiet Library & Deep Focus',
+    isGlobal: false,
+    creatorUserId: 'usr-mathias-cheow-primary',
+    peerCount: 4,
+  },
+  {
+    code: '883014',
+    name: 'STEM & Problem Sets',
+    isGlobal: false,
+    creatorUserId: 'usr-mathias-cheow-primary',
+    peerCount: 4,
+  },
+  {
+    code: '519208',
+    name: 'Pomodoro Sprint Pod',
+    isGlobal: false,
+    creatorUserId: 'usr-mathias-cheow-primary',
+    peerCount: 3,
+  },
+];
+
+export const DEFAULT_PREVIEW_PEERS: Record<string, PeerProfile[]> = {
+  // Global Focus Room
+  '000000': [
+    {
+      id: 'peer-marcus-chen',
+      name: 'Marcus Chen',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MarcusChen&backgroundColor=b6e3f4,c0aede',
+      points: 185,
+      status: 'studying',
+      timeLeftMinutes: 38,
+      studyDurationFormatted: '1h 30m',
+    },
+    {
+      id: 'peer-sarah-jenkins',
+      name: 'Sarah Jenkins',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=SarahJenkins&backgroundColor=ffd5dc,ffdfbf',
+      points: 210,
+      status: 'studying',
+      timeLeftMinutes: 24,
+      studyDurationFormatted: '1h 00m',
+    },
+    {
+      id: 'peer-liam-oconnor',
+      name: "Liam O'Connor",
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=LiamOConnor&backgroundColor=d1d4f9',
+      points: 98,
+      status: 'studying',
+      timeLeftMinutes: 15,
+      studyDurationFormatted: '45m',
+    },
+    {
+      id: 'peer-elena-rostova',
+      name: 'Elena Rostova',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=ElenaRostova&backgroundColor=b6e3f4,ffd5dc',
+      points: 245,
+      status: 'studying',
+      timeLeftMinutes: 52,
+      studyDurationFormatted: '2h 00m',
+    },
+    {
+      id: 'peer-alex-kim',
+      name: 'Alex Kim',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=AlexKim&backgroundColor=c0aede',
+      points: 140,
+      status: 'studying',
+      timeLeftMinutes: 20,
+      studyDurationFormatted: '1h 00m',
+    },
+    {
+      id: 'peer-chloe-martin',
+      name: 'Chloe Martin',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=ChloeMartin&backgroundColor=ffdfbf',
+      points: 165,
+      status: 'studying',
+      timeLeftMinutes: 41,
+      studyDurationFormatted: '1h 15m',
+    },
+    {
+      id: 'peer-david-zhao',
+      name: 'David Zhao',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=DavidZhao&backgroundColor=b6e3f4',
+      points: 190,
+      status: 'studying',
+      timeLeftMinutes: 33,
+      studyDurationFormatted: '1h 30m',
+    },
+    {
+      id: 'peer-maya-patel',
+      name: 'Maya Patel',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MayaPatel&backgroundColor=ffd5dc',
+      points: 120,
+      status: 'studying',
+      timeLeftMinutes: 18,
+      studyDurationFormatted: '50m',
+    },
+  ],
+  // Quiet Library & Deep Focus
+  '204911': [
+    {
+      id: 'peer-david-zhao-q',
+      name: 'David Zhao',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=DavidZhao&backgroundColor=b6e3f4',
+      points: 190,
+      status: 'studying',
+      timeLeftMinutes: 48,
+      studyDurationFormatted: '2h 00m',
+    },
+    {
+      id: 'peer-maya-patel-q',
+      name: 'Maya Patel',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MayaPatel&backgroundColor=ffd5dc',
+      points: 125,
+      status: 'studying',
+      timeLeftMinutes: 35,
+      studyDurationFormatted: '1h 00m',
+    },
+    {
+      id: 'peer-julian-voss-q',
+      name: 'Julian Voss',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=JulianVoss&backgroundColor=c0aede',
+      points: 160,
+      status: 'studying',
+      timeLeftMinutes: 28,
+      studyDurationFormatted: '1h 15m',
+    },
+    {
+      id: 'peer-hannah-lee-q',
+      name: 'Hannah Lee',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=HannahLee&backgroundColor=d1d4f9',
+      points: 145,
+      status: 'studying',
+      timeLeftMinutes: 42,
+      studyDurationFormatted: '1h 30m',
+    },
+  ],
+  // STEM & Problem Sets
+  '883014': [
+    {
+      id: 'peer-kevin-zhang-s',
+      name: 'Kevin Zhang',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=KevinZhang&backgroundColor=b6e3f4',
+      points: 215,
+      status: 'studying',
+      timeLeftMinutes: 36,
+      studyDurationFormatted: '1h 15m',
+    },
+    {
+      id: 'peer-lucas-silva-s',
+      name: 'Lucas Silva',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=LucasSilva&backgroundColor=ffdfbf',
+      points: 130,
+      status: 'studying',
+      timeLeftMinutes: 22,
+      studyDurationFormatted: '45m',
+    },
+    {
+      id: 'peer-emily-watson-s',
+      name: 'Emily Watson',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=EmilyWatson&backgroundColor=ffd5dc',
+      points: 180,
+      status: 'studying',
+      timeLeftMinutes: 50,
+      studyDurationFormatted: '1h 30m',
+    },
+    {
+      id: 'peer-alex-kim-s',
+      name: 'Alex Kim',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=AlexKim&backgroundColor=c0aede',
+      points: 155,
+      status: 'studying',
+      timeLeftMinutes: 19,
+      studyDurationFormatted: '1h 00m',
+    },
+  ],
+  // Pomodoro Sprint Pod
+  '519208': [
+    {
+      id: 'peer-sophia-taylor-p',
+      name: 'Sophia Taylor',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=SophiaTaylor&backgroundColor=ffd5dc',
+      points: 95,
+      status: 'studying',
+      timeLeftMinutes: 14,
+      studyDurationFormatted: '25m',
+    },
+    {
+      id: 'peer-ryan-cooper-p',
+      name: 'Ryan Cooper',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=RyanCooper&backgroundColor=b6e3f4',
+      points: 110,
+      status: 'studying',
+      timeLeftMinutes: 19,
+      studyDurationFormatted: '25m',
+    },
+    {
+      id: 'peer-nathan-drake-p',
+      name: 'Nathan Drake',
+      avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=NathanDrake&backgroundColor=c0aede',
+      points: 85,
+      status: 'studying',
+      timeLeftMinutes: 8,
+      studyDurationFormatted: '25m',
+    },
+  ],
+};
+
 export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   task,
   allTasks = [],
   tags,
   userId = 'usr-mathias-cheow-primary',
+  isPreview = false,
+  initialRoomCode,
   onCompleteTask,
   onEndIncomplete,
   onTimerRunningChange,
@@ -80,6 +301,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 }) => {
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [flyingPointsBanner, setFlyingPointsBanner] = useState<{ taskTitle: string; points: number } | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -87,18 +309,27 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   };
 
   // Active Focus Rooms List
-  const [rooms, setRooms] = useState<FocusRoomItem[]>([]);
-  const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<FocusRoomItem[]>(() => (isPreview ? DEFAULT_PREVIEW_ROOMS : []));
+  const [activeRoomCode, setActiveRoomCode] = useState<string | null>(() => {
+    if (initialRoomCode) return initialRoomCode;
+    return null;
+  });
   const [roomSearchQuery, setRoomSearchQuery] = useState<string>('');
+
+  useEffect(() => {
+    if (initialRoomCode) {
+      setActiveRoomCode(initialRoomCode);
+      try {
+        localStorage.setItem('uniwork_active_room_code', initialRoomCode);
+      } catch {}
+    }
+  }, [initialRoomCode]);
 
   // Automatically draw in / collapse sidebar inside focus room, draw out / expand on main hub
   useEffect(() => {
     if (onSetSidebarCollapsed) {
-      if (activeRoomCode) {
-        onSetSidebarCollapsed(true);
-      } else {
-        onSetSidebarCollapsed(false);
-      }
+      const shouldCollapse = !!activeRoomCode;
+      onSetSidebarCollapsed(!!activeRoomCode);
     }
   }, [activeRoomCode, onSetSidebarCollapsed]);
 
@@ -140,6 +371,20 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   const [activeRoomMenuCode, setActiveRoomMenuCode] = useState<string | null>(null);
   const [activePeerMenuId, setActivePeerMenuId] = useState<string | null>(null);
   const [isRoomDropdownOpen, setIsRoomDropdownOpen] = useState(false);
+
+  // Close dropdowns and 3-dot menus on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.focus-room-dropdown-container') && !target.closest('.focus-room-menu-btn')) {
+        setIsRoomDropdownOpen(false);
+        setActiveRoomMenuCode(null);
+        setActivePeerMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Direct Link Join Confirmation Modal
   const [unjoinedLinkRoom, setUnjoinedLinkRoom] = useState<FocusRoomItem | null>(null);
@@ -215,12 +460,39 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     todayPoints: 0,
   });
 
+  useEffect(() => {
+    if (isPreview || !userId) return;
+    fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          if (d.displayName) {
+            setUserName(d.displayName);
+            setTempNameInput(d.displayName);
+            localStorage.setItem('uniwork_user_name', d.displayName);
+          }
+          if (d.avatarUrl) {
+            setUserAvatar({ avatarUrl: d.avatarUrl, style: d.style || 'adventurer', seed: d.seed || 'student' });
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isPreview, userId]);
+
   // Global & Room Peers
-  const [peers, setPeers] = useState<PeerProfile[]>([]);
+  const [peers, setPeers] = useState<PeerProfile[]>(() => (isPreview ? DEFAULT_PREVIEW_PEERS['000000'] : []));
   const [selectedPeer, setSelectedPeer] = useState<PeerProfile | null>(null);
+
+  // Sync preview peers when room changes in preview mode
+  useEffect(() => {
+    if (isPreview && activeRoomCode) {
+      setPeers(DEFAULT_PREVIEW_PEERS[activeRoomCode] || DEFAULT_PREVIEW_PEERS['000000']);
+    }
+  }, [isPreview, activeRoomCode]);
 
   // Fetch User Rooms
   const fetchRooms = useCallback(async () => {
+    if (isPreview) return;
     try {
       const res = await fetch(`/api/focus/rooms?userId=${encodeURIComponent(userId)}`);
       const data = await res.json();
@@ -230,10 +502,12 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     } catch {
       // fallback
     }
-  }, [userId]);
+  }, [isPreview, userId]);
 
   useEffect(() => {
     fetchRooms();
+    const pollInterval = setInterval(fetchRooms, 4000);
+    return () => clearInterval(pollInterval);
   }, [fetchRooms]);
 
   // Filtered Rooms for Search
@@ -245,6 +519,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   // URL Parsing & Route Matching
   useEffect(() => {
+    if (isPreview) return;
     const parseUrlRoute = async () => {
       const pathname = window.location.pathname;
       const matchPeer = pathname.match(/^\/focus\/([0-9a-zA-Z]+)\/(.+)$/i);
@@ -310,11 +585,11 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     parseUrlRoute();
     window.addEventListener('popstate', parseUrlRoute);
     return () => window.removeEventListener('popstate', parseUrlRoute);
-  }, [peers, rooms]);
+  }, [isPreview, peers, rooms]);
 
   // Fetch Peers for current Active Room
   const fetchPeers = useCallback(() => {
-    if (!activeRoomCode) return;
+    if (isPreview || !activeRoomCode) return;
     fetch(`/api/focus/room/peers?roomCode=${encodeURIComponent(activeRoomCode)}&userId=${encodeURIComponent(userId)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -323,7 +598,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         }
       })
       .catch(() => {});
-  }, [activeRoomCode, userId]);
+  }, [isPreview, activeRoomCode, userId]);
 
   useEffect(() => {
     fetchPeers();
@@ -333,7 +608,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   // Presence Heartbeat every 15s for active room
   useEffect(() => {
-    if (!isRunning || isLockMode || !activeRoomCode) return;
+    if (isPreview || !isRunning || isLockMode || !activeRoomCode) return;
 
     const sendHeartbeat = () => {
       const leftMins = Math.max(0, Math.ceil(secondsRemaining / 60));
@@ -355,7 +630,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     sendHeartbeat();
     const hbInterval = setInterval(sendHeartbeat, 15000);
     return () => clearInterval(hbInterval);
-  }, [isRunning, isLockMode, userId, userName, userAvatar.avatarUrl, userStats.rollingAverage, secondsRemaining, elapsedSeconds, activeRoomCode]);
+  }, [isPreview, isRunning, isLockMode, userId, userName, userAvatar.avatarUrl, userStats.rollingAverage, secondsRemaining, elapsedSeconds, activeRoomCode]);
 
   // Timer Tick
   useEffect(() => {
@@ -378,6 +653,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   // Fetch Stats & Avatar
   useEffect(() => {
+    if (isPreview) return;
     fetch(`/api/user/avatar?userId=${encodeURIComponent(userId)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -399,12 +675,43 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         }
       })
       .catch(() => {});
-  }, [userId]);
+
+    // Restore active server-side focus session from PostgreSQL
+    fetch(`/api/focus/active?userId=${encodeURIComponent(userId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.session) {
+          const s = d.session;
+          setServerSession(s);
+          if (s.isRunning) {
+            setIsRunning(true);
+            const now = Date.now();
+            const elapsedSinceLast = Math.max(0, Math.floor((now - Number(s.lastUpdatedMs || s.startTimeMs)) / 1000));
+            const totalElapsed = (Number(s.pausedElapsedSec) || 0) + elapsedSinceLast;
+            setElapsedSeconds(totalElapsed);
+            setSessionCumulativeSeconds(totalElapsed);
+            const planned = Number(s.plannedDurationSec) || 25 * 60;
+            setSecondsRemaining(Math.max(0, planned - totalElapsed));
+          } else if (s.pausedElapsedSec) {
+            const paused = Number(s.pausedElapsedSec);
+            setElapsedSeconds(paused);
+            setSessionCumulativeSeconds(paused);
+            const planned = Number(s.plannedDurationSec) || 25 * 60;
+            setSecondsRemaining(Math.max(0, planned - paused));
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isPreview, userId]);
 
   // Navigation Handlers
   const handleOpenRoom = (roomCode: string) => {
     setActiveRoomCode(roomCode);
     setIsRoomDropdownOpen(false);
+    try {
+      localStorage.setItem('uniwork_active_room_code', roomCode);
+    } catch {}
+    if (isPreview) return;
     try {
       const targetPath = `/focus/${roomCode}`;
       if (window.location.pathname !== targetPath) {
@@ -420,6 +727,10 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     setSelectedPeer(null);
     setIsRoomDropdownOpen(false);
     try {
+      localStorage.removeItem('uniwork_active_room_code');
+    } catch {}
+    if (isPreview) return;
+    try {
       if (window.location.pathname !== '/focus') {
         window.history.pushState({}, '', '/focus');
       }
@@ -430,6 +741,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   const handleOpenPeerProfile = (peer: PeerProfile) => {
     setSelectedPeer(peer);
+    if (isPreview) return;
     try {
       const currentCode = activeRoomCode || '000000';
       const targetPath = `/focus/${currentCode}/${encodeURIComponent(peer.name)}`;
@@ -443,6 +755,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   const handleClosePeerProfile = () => {
     setSelectedPeer(null);
+    if (isPreview) return;
     try {
       const currentCode = activeRoomCode || '000000';
       const targetPath = `/focus/${currentCode}`;
@@ -458,6 +771,23 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   const handleCreateRoomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isCreatingRoom) return;
+
+    if (isPreview) {
+      const newCode = String(Math.floor(100000 + Math.random() * 900000));
+      const newRm: FocusRoomItem = {
+        code: newCode,
+        name: newRoomNameInput.trim() || 'New Focus Room',
+        isGlobal: false,
+        creatorUserId: userId,
+        peerCount: 1,
+      };
+      setRooms((prev) => [...prev, newRm]);
+      showToast(`Created focus room "${newRm.name}"!`);
+      setIsCreateModalOpen(false);
+      setNewRoomNameInput('');
+      handleOpenRoom(newCode);
+      return;
+    }
 
     setIsCreatingRoom(true);
     try {
@@ -488,6 +818,30 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
     if (!codeToJoin) {
       setJoinError('Please enter a 6-digit focus room code.');
+      return;
+    }
+
+    if (isPreview) {
+      const found = rooms.find((r) => r.code === codeToJoin);
+      if (found) {
+        showToast(`Joined focus room "${found.name}"!`);
+        setJoinCodeInput('');
+        setIsJoinModalOpen(false);
+        handleOpenRoom(found.code);
+      } else {
+        const newRm: FocusRoomItem = {
+          code: codeToJoin,
+          name: `Study Pod #${codeToJoin.slice(0, 3)}`,
+          isGlobal: false,
+          creatorUserId: 'peer',
+          peerCount: 2,
+        };
+        setRooms((prev) => [...prev, newRm]);
+        showToast(`Joined focus room "${newRm.name}"!`);
+        setJoinCodeInput('');
+        setIsJoinModalOpen(false);
+        handleOpenRoom(codeToJoin);
+      }
       return;
     }
 
@@ -545,6 +899,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   // Leave / Delete Room Handler
   const handleDeleteRoom = async (code: string) => {
     if (code === '000000') return;
+    if (isPreview) {
+      setRooms((prev) => prev.filter((r) => r.code !== code));
+      showToast('Focus room removed.');
+      if (activeRoomCode === code) {
+        handleReturnToHub();
+      }
+      return;
+    }
     try {
       await fetch(`/api/focus/rooms/${encodeURIComponent(code)}?userId=${encodeURIComponent(userId)}`, {
         method: 'DELETE',
@@ -563,6 +925,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   const handleRenameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!renameModalRoom || isRenamingRoom) return;
+
+    if (isPreview) {
+      setRooms((prev) => prev.map((r) => (r.code === renameModalRoom.code ? { ...r, name: renameInput.trim() } : r)));
+      showToast('Focus room renamed!');
+      setRenameModalRoom(null);
+      setRenameInput('');
+      return;
+    }
 
     setIsRenamingRoom(true);
     try {
@@ -643,6 +1013,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     setElapsedSeconds(0);
     setSessionCumulativeSeconds(0);
 
+    if (isPreview) return;
+
     try {
       await fetch('/api/focus/session/start', {
         method: 'POST',
@@ -668,6 +1040,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     const nextState = !isRunning;
     setIsRunning(nextState);
 
+    if (isPreview) return;
+
     try {
       await fetch('/api/focus/session/pause', {
         method: 'POST',
@@ -685,15 +1059,54 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   };
 
   // Complete Task
-  const handleCompleteCurrentTask = () => {
+  const handleCompleteCurrentTask = async () => {
     const timeDeltaMinutes = Math.round(elapsedSeconds / 60);
+    const calculatedPoints = Math.max(5, Math.round((elapsedSeconds / 60) * 2));
+
+    try {
+      if (!isPreview && effectiveTask) {
+        await fetch('/api/focus/session/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId: effectiveTask.id,
+            userId,
+            plannedMinutes: Math.round(plannedDurationSec / 60),
+            actualMinutes: timeDeltaMinutes,
+          }),
+        });
+      }
+    } catch {}
+
+    if (effectiveTask) {
+      setFlyingPointsBanner({
+        taskTitle: effectiveTask.title,
+        points: calculatedPoints,
+      });
+      setTimeout(() => setFlyingPointsBanner(null), 3500);
+    }
+
     onCompleteTask(effectiveTask, timeDeltaMinutes, 'keep_original');
     setServerSession(null);
     setIsRunning(false);
   };
 
   // End as Incomplete
-  const handleEndIncompleteSession = () => {
+  const handleEndIncompleteSession = async () => {
+    try {
+      if (!isPreview && effectiveTask) {
+        await fetch('/api/focus/session/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId: effectiveTask.id,
+            userId,
+            status: 'incomplete',
+            isIncomplete: true,
+          }),
+        });
+      }
+    } catch {}
     onEndIncomplete();
     setServerSession(null);
     setIsRunning(false);
@@ -733,6 +1146,19 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     setUserName(newName);
     localStorage.setItem('uniwork_user_name', newName);
     setIsAvatarModalOpen(false);
+
+    try {
+      await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userName: newName, displayName: newName, avatarUrl, style: selectedAvatarStyle, seed: newName }),
+      });
+      await fetch('/api/user/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, avatarUrl, style: selectedAvatarStyle, seed: newName }),
+      });
+    } catch {}
   };
 
   // Sorted Peers with Pinned Priority
@@ -755,7 +1181,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       name: activeRoomCode === '000000' ? 'Global Focus Room' : 'Focus Room',
       isGlobal: activeRoomCode === '000000',
       creatorUserId: 'system',
-      peerCount: peers.length + 1,
+      peerCount: peers.length,
     };
   }, [rooms, activeRoomCode, peers.length]);
 
@@ -784,63 +1210,74 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       )}
 
       {/* TOP HEADER BAR */}
-      <div className="h-16 px-6 md:px-10 flex items-center justify-between flex-shrink-0 bg-white dark:bg-[#0F172A] border-b border-slate-200 dark:border-slate-800 select-none">
-        <div className="flex items-center gap-3">
-          {activeRoomCode ? (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleReturnToHub}
-                className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-[#0066FF] dark:hover:text-[#60A5FA] transition cursor-pointer px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>All Focus Rooms</span>
-              </button>
-
-              {/* Room Selector Dropdown */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsRoomDropdownOpen(!isRoomDropdownOpen)}
-                  className="flex items-center gap-1.5 text-base font-bold text-slate-900 dark:text-white hover:text-[#0066FF] transition cursor-pointer"
-                >
-                  <span>{activeRoomObj.name}</span>
-                  <ChevronDown className="w-4 h-4 text-slate-400" />
-                </button>
-
-                {isRoomDropdownOpen && (
-                  <div
-                    className="absolute left-0 top-9 z-[100] w-60 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95 max-h-64 overflow-y-auto"
-                    onClick={() => setIsRoomDropdownOpen(false)}
+      <div className="h-16 px-4 sm:px-6 md:px-10 flex items-center justify-between flex-shrink-0 bg-white dark:bg-[#0F172A] border-b border-slate-200 dark:border-slate-800 select-none">
+        <div className="flex items-center gap-3 min-w-0">
+              {activeRoomCode ? (
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button
+                    type="button"
+                    onClick={handleReturnToHub}
+                    className="p-1 rounded-md text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer flex-shrink-0"
+                    title="Exit Room"
+                    aria-label="Exit Room"
                   >
-                    {rooms.map((rm) => (
-                      <button
-                        key={rm.code}
-                        type="button"
-                        onClick={() => handleOpenRoom(rm.code)}
-                        className={`w-full px-4 py-2.5 text-left font-medium flex items-center justify-between transition ${
-                          rm.code === activeRoomCode
-                            ? 'bg-blue-50 dark:bg-blue-950/40 text-[#0066FF] dark:text-[#60A5FA] font-bold'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+
+                  {/* Room Selector Dropdown */}
+                  <div className="relative min-w-0 focus-room-dropdown-container">
+                    <button
+                      type="button"
+                      onClick={() => setIsRoomDropdownOpen(!isRoomDropdownOpen)}
+                      className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-slate-900 dark:text-white hover:text-[#0066FF] transition cursor-pointer min-w-0"
+                    >
+                      <span className="truncate max-w-[130px] sm:max-w-[200px] md:max-w-xs">{activeRoomObj.name}</span>
+                      <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    </button>
+
+                    {isRoomDropdownOpen && (
+                      <div
+                        className="absolute left-0 top-9 z-[100] w-60 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95 max-h-64 overflow-y-auto"
+                        onClick={() => setIsRoomDropdownOpen(false)}
                       >
-                        <span className="truncate pr-2">{rm.name}</span>
-                        <span className="text-[10px] font-mono font-medium text-slate-400">
-                          {rm.peerCount} studying
-                        </span>
-                      </button>
-                    ))}
+                        {rooms.map((rm) => (
+                          <button
+                            key={rm.code}
+                            type="button"
+                            onClick={() => handleOpenRoom(rm.code)}
+                            className={`w-full px-4 py-2.5 text-left font-medium flex items-center justify-between transition ${
+                              rm.code === activeRoomCode
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-[#0066FF] dark:text-[#60A5FA] font-bold'
+                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <span className="truncate pr-2">{rm.name}</span>
+                            <span className="text-[10px] font-mono font-medium text-slate-400">
+                              {rm.peerCount} studying
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Restored Icon & Focus Rooms Title */
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
-              <AlarmClockCheck className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
-              <span>Focus Rooms</span>
-            </h1>
-          )}
+
+                  {/* Active Task in top bar */}
+                  {effectiveTask && effectiveTask.title && effectiveTask.title !== 'open' && (
+                    <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200 dark:border-slate-800 min-w-0">
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0">Task</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px] md:max-w-[220px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                        {effectiveTask.title}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Restored Icon & Focus Rooms Title */
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                  <AlarmClockCheck className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
+                  <span>Focus Rooms</span>
+                </h1>
+              )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -849,55 +1286,64 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
           </span>
 
           {activeRoomCode && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setActiveRoomMenuCode(activeRoomMenuCode === activeRoomCode ? null : activeRoomCode)}
-                className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer"
-              >
-                <MoreVertical className="w-5 h-5" />
-              </button>
+            <div className="flex items-center gap-1">
 
-              {activeRoomMenuCode === activeRoomCode && (
-                <div
-                  className="absolute right-0 top-11 z-[100] w-48 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95"
-                  onClick={() => setActiveRoomMenuCode(null)}
+              <div className="relative focus-room-dropdown-container">
+                <button
+                  type="button"
+                  onClick={() => setActiveRoomMenuCode(activeRoomMenuCode === activeRoomCode ? null : activeRoomCode)}
+                  className="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition cursor-pointer focus-room-menu-btn"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setShareModalRoom(activeRoomObj)}
-                    className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
-                  >
-                    <Share2 className="w-4 h-4 text-[#0066FF]" />
-                    <span>Share Room</span>
-                  </button>
+                  <MoreVertical className="w-5 h-5" />
+                </button>
 
-                  {!activeRoomObj.isGlobal && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRenameModalRoom(activeRoomObj);
-                          setRenameInput(activeRoomObj.name);
-                        }}
-                        className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
-                      >
-                        <Edit3 className="w-4 h-4 text-slate-500" />
-                        <span>Rename Room</span>
-                      </button>
+                {activeRoomMenuCode === activeRoomCode && (
+                  <div className="absolute right-0 top-11 z-[100] w-48 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95 focus-room-dropdown-container" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveRoomMenuCode(null);
+                        setShareModalRoom(activeRoomObj);
+                      }}
+                      className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4 text-[#0066FF]" />
+                      <span>Share Room</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRoom(activeRoomObj.code)}
-                        className="w-full px-4 py-2.5 text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 border-t border-slate-100 dark:border-slate-800"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Leave Room</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+                    {!activeRoomObj.isGlobal && (
+                      <React.Fragment>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveRoomMenuCode(null);
+                            setRenameModalRoom(activeRoomObj);
+                            setRenameInput(activeRoomObj.name);
+                          }}
+                          className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                        >
+                          <Edit3 className="w-4 h-4 text-slate-500" />
+                          <span>Rename Room</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveRoomMenuCode(null);
+                            handleDeleteRoom(activeRoomObj.code);
+                          }}
+                          className="w-full px-4 py-2.5 text-left font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 border-t border-slate-100 dark:border-slate-800"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Leave Room</span>
+                        </button>
+                      </React.Fragment>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -906,7 +1352,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       {/* BODY CONTENT AREA */}
       {!activeRoomCode ? (
         /* MAIN FOCUS ROOM HUB PAGE (/focus) */
-        <div className="flex-1 px-6 md:px-10 py-8 w-full flex flex-col justify-between">
+        <div className="flex-1 px-4 sm:px-6 md:px-8 lg:px-10 py-6 sm:py-8 w-full flex flex-col justify-between">
           <div>
             {/* SEARCH BAR DIRECTLY ABOVE LIST ROWS */}
             <div className="relative w-full mb-4">
@@ -925,15 +1371,15 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
               {filteredRooms.map((rm) => (
                 <div
                   key={rm.code}
-                  className="px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group relative cursor-pointer"
+                  className="px-4 sm:px-5 py-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition group relative cursor-pointer gap-2 sm:gap-4"
                   onClick={() => handleOpenRoom(rm.code)}
                 >
                   {/* Left: Name and '· X studying' right beside it */}
-                  <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 pr-2">
                     <span className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-[#0066FF] dark:group-hover:text-[#60A5FA] transition truncate">
                       {rm.name}
                     </span>
-                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 flex-shrink-0">
+                    <span className="text-xs font-medium text-slate-400 dark:text-slate-500 flex-shrink-0 whitespace-nowrap">
                       · {rm.peerCount} studying
                     </span>
                   </div>
@@ -954,16 +1400,18 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
                       {activeRoomMenuCode === rm.code && (
                         <div
-                          className="absolute right-0 top-9 z-[100] w-48 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95"
+                          className="absolute right-0 top-9 z-[100] w-48 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 text-xs animate-in fade-in zoom-in-95 focus-room-dropdown-container"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
                             type="button"
-                            onClick={() => {
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setActiveRoomMenuCode(null);
                               setShareModalRoom(rm);
                             }}
-                            className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                            className="w-full px-4 py-2.5 text-left font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 cursor-pointer"
                           >
                             <Share2 className="w-4 h-4 text-[#0066FF]" />
                             <span>Share Room</span>
@@ -1029,12 +1477,12 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         </div>
       ) : (
         /* INSIDE SPECIFIC FOCUS ROOM PAGE (/focus/:roomCode) */
-        <div className="flex-1 px-6 md:px-10 py-6 w-full flex flex-col divide-y divide-slate-200/80 dark:divide-slate-800">
+        <div className="flex-1 px-4 sm:px-6 md:px-8 lg:px-10 py-6 w-full flex flex-col divide-y divide-slate-200/80 dark:divide-slate-800">
           
           {/* TOP HALF: FOCUS TIMER DASHBOARD */}
           <div className="pb-6">
             {isLockMode ? (
-              <div className="py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
                     <Lock className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -1062,17 +1510,17 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
               </div>
             ) : (
               <div className="py-2">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-stretch lg:items-center">
                   
                   {/* Left Column: Clock & Play/Pause */}
-                  <div className="md:col-span-5 flex items-center justify-between pr-2">
+                  <div className="lg:col-span-5 flex flex-col justify-center pr-0 lg:pr-2">
                     <div>
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">
                         Focus Timer
                       </span>
 
-                      <div className="flex items-center gap-3.5">
-                        <span className="text-5xl sm:text-6xl md:text-6xl font-bold tracking-tight font-mono tabular-nums text-slate-900 dark:text-white select-all leading-none">
+                      <div className="flex items-center gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
+                        <span className="text-4xl sm:text-5xl lg:text-5xl xl:text-6xl font-bold tracking-tight font-mono tabular-nums text-slate-900 dark:text-white select-all leading-none">
                           {Math.floor(elapsedSeconds / 3600) > 0
                             ? `${Math.floor(elapsedSeconds / 3600)}:${String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`
                             : `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`}
@@ -1107,19 +1555,19 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                   </div>
 
                   {/* Right Column: Dedicated Time Left Card */}
-                  <div className="md:col-span-7 bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xs">
-                    <div className="flex items-center justify-between mb-2 text-xs">
-                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2 max-w-[260px]">
+                  <div className="lg:col-span-7 bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between gap-2 mb-2 text-xs">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate min-w-0 flex-1 pr-2">
                         Task: {effectiveTask?.title && effectiveTask.title !== 'open' && effectiveTask.title !== 'Focus Session'
                           ? effectiveTask.title
                           : 'Active Focus Session'}
                       </span>
                       {elapsedSeconds > plannedDurationSec ? (
-                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400 flex-shrink-0 animate-pulse">
+                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400 flex-shrink-0 whitespace-nowrap animate-pulse">
                           +{Math.floor((elapsedSeconds - plannedDurationSec) / 60)}m overtime
                         </span>
                       ) : (
-                        <span className="font-mono font-bold text-[#0066FF] dark:text-[#60A5FA] flex-shrink-0">
+                        <span className="font-mono font-bold text-[#0066FF] dark:text-[#60A5FA] flex-shrink-0 whitespace-nowrap">
                           {Math.max(0, Math.ceil((plannedDurationSec - elapsedSeconds) / 60))}m left
                         </span>
                       )}
@@ -1138,11 +1586,11 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                       )}
                     </div>
 
-                    <div className="mt-3.5 flex items-center justify-between pt-0.5">
+                    <div className="mt-3.5 flex items-center justify-between gap-2 pt-0.5 flex-wrap sm:flex-nowrap">
                       <button
                         type="button"
                         onClick={handleCompleteCurrentTask}
-                        className="px-4 py-2 rounded-xl bg-[#0066FF] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                        className="px-4 py-2 rounded-xl bg-[#0066FF] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
                       >
                         <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
                         <span>Complete Task</span>
@@ -1151,7 +1599,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                       <button
                         type="button"
                         onClick={handleEndIncompleteSession}
-                        className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium transition cursor-pointer bg-transparent"
+                        className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium transition cursor-pointer bg-transparent flex-shrink-0"
                       >
                         End as Incomplete
                       </button>
@@ -1171,14 +1619,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                   {activeRoomObj.name} Students
                 </h2>
                 <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-                  · {peers.length + 1} studying now
+                  · {activeRoomObj?.peerCount || peers.length} studying now
                 </span>
               </div>
             </div>
 
             {/* Student Presence Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-x-4 gap-y-6">
-              {/* YOU Card (Removed YOU prefix) */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11 gap-x-3 sm:gap-x-4 gap-y-5 sm:gap-y-6">
+              {/* YOU Card: Always displayed */}
               <button
                 type="button"
                 onClick={() => {
@@ -1187,25 +1635,25 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                 }}
                 className="flex flex-col items-center group cursor-pointer select-none"
               >
-                <div className="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-[#0066FF] via-blue-400 to-sky-300 shadow-md group-hover:scale-105 transition">
-                  <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-900">
-                    <img
-                      src={userAvatar.avatarUrl}
-                      alt={userName}
-                      className="w-full h-full object-cover rounded-full"
-                    />
+                  <div className="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-[#0066FF] via-blue-400 to-sky-300 shadow-md group-hover:scale-105 transition">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-900">
+                      <img
+                        src={userAvatar.avatarUrl}
+                        alt={userName}
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-2 text-center max-w-[90px]">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                    {userName}
-                  </span>
-                  <span className="text-[10px] font-mono font-semibold text-[#0066FF] dark:text-[#60A5FA] block mt-0.5">
-                    {userStats.rollingAverage} pts
-                  </span>
-                </div>
-              </button>
+                  <div className="mt-2 text-center max-w-[140px]">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 block leading-snug">
+                      {userName} (YOU)
+                    </span>
+                    <span className="text-[10px] font-mono font-semibold text-[#0066FF] dark:text-[#60A5FA] block mt-0.5">
+                      {userStats.rollingAverage} pts
+                    </span>
+                  </div>
+                </button>
 
               {/* PEERS CARDS WITH 3-DOT MENU & PINNING */}
               {sortedPeers.map((peer) => {
@@ -1229,14 +1677,17 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                         </div>
 
                         {isPinned && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#0066FF] text-white flex items-center justify-center shadow-xs text-[10px]">
+                          <span
+                            title={isPinnedGlob ? 'Pinned globally' : 'Pinned in this focus room'}
+                            className="absolute -top-1 -left-1 z-10 w-5 h-5 rounded-full bg-[#0066FF] text-white flex items-center justify-center shadow-xs text-[10px]"
+                          >
                             <Pin className="w-3 h-3 fill-current" />
                           </span>
                         )}
                       </div>
 
-                      <div className="mt-2 text-center max-w-[90px]">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">
+                      <div className="mt-2 text-center max-w-[140px]">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2 block leading-snug">
                           {peer.name}
                         </span>
                         <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400 block mt-0.5">
@@ -1353,7 +1804,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={`${window.location.origin}/focus/${shareModalRoom.code}`}
+                  value={`https://myuniwork.app/focus/${shareModalRoom.code}`}
                   className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 focus:outline-hidden truncate"
                 />
                 <button
@@ -1465,9 +1916,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
             <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
               Create Focus Room
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Enter a name for your focus room. A unique 6-digit code will be generated automatically.
-            </p>
+
 
             <form onSubmit={handleCreateRoomSubmit} className="space-y-4">
               <div>
@@ -1478,7 +1927,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                   type="text"
                   value={newRoomNameInput}
                   onChange={(e) => setNewRoomNameInput(e.target.value)}
-                  placeholder="e.g. CS101 Study Group, Lofi Chill Stream"
+                  maxLength={15}
+                  placeholder="Enter room name..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0066FF]"
                 />
               </div>

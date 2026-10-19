@@ -207,15 +207,15 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
           {/* Right Side: Exact Focus Room Timer Layout (Item 1 in design screenshot) */}
           <div className="md:col-span-8">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-stretch lg:items-center">
               {/* Left Column: Clock (5 cols - Monospace Stopwatch, No pause button) */}
-              <div className="md:col-span-5 flex items-center justify-between pr-2">
+              <div className="lg:col-span-5 flex flex-col justify-center pr-0 lg:pr-2">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">
                     Focus Timer
                   </span>
                   <div className="flex items-center gap-3.5">
-                    <span className="text-5xl sm:text-6xl md:text-6xl font-bold tracking-tight font-mono tabular-nums text-slate-900 dark:text-white select-all leading-none">
+                    <span className="text-4xl sm:text-5xl lg:text-5xl xl:text-6xl font-bold tracking-tight font-mono tabular-nums text-slate-900 dark:text-white select-all leading-none">
                       {formatTime(totalElapsedSeconds)}
                     </span>
                   </div>
@@ -223,17 +223,17 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
               </div>
 
               {/* Right Column: Dedicated Time Left / Task Card (7 cols, No action buttons) */}
-              <div className="md:col-span-7 bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-2 text-xs">
-                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2 max-w-[180px]">
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xs flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-2 mb-2 text-xs">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate min-w-0 flex-1 pr-2">
                     Task: Active Focus Session
                   </span>
                   {isOvertime ? (
-                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400 flex-shrink-0 animate-pulse">
+                    <span className="font-mono font-bold text-rose-600 dark:text-rose-400 flex-shrink-0 whitespace-nowrap animate-pulse">
                       +{otMins}:{otSecs < 10 ? '0' : ''}{otSecs} overtime
                     </span>
                   ) : (
-                    <span className="font-mono font-bold text-[#0066FF] dark:text-[#60A5FA] flex-shrink-0">
+                    <span className="font-mono font-bold text-[#0066FF] dark:text-[#60A5FA] flex-shrink-0 whitespace-nowrap">
                       {formattedMins}m left
                     </span>
                   )}

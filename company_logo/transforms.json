@@ -1,0 +1,22 @@
+{
+  "google-calendar": {
+    "x": 0,
+    "y": 0,
+    "scale": 1
+  },
+  "ypt": {
+    "x": -10,
+    "y": 0,
+    "scale": 1
+  },
+  "ticktick": {
+    "x": -1,
+    "y": 0,
+    "scale": 1
+  },
+  "forest": {
+    "x": -2,
+    "y": 0,
+    "scale": 1
+  }
+}

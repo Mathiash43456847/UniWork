@@ -260,13 +260,13 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
   return (
     <div className="h-screen h-[100dvh] w-screen w-[100dvw] bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-y-auto overflow-x-hidden">
       
-      {/* Top Right Back Button */}
+      {/* Top Left Back Button */}
       <motion.button
         type="button"
         onClick={handleBack}
-        whileHover={{ scale: 1.05, x: -2 }}
+        whileHover={{ scale: 1.05, x: 2 }}
         whileTap={{ scale: 0.95 }}
-        className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-semibold text-slate-300 hover:text-white shadow-xl backdrop-blur-md transition cursor-pointer group"
+        className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-semibold text-slate-300 hover:text-white shadow-xl backdrop-blur-md transition cursor-pointer group"
       >
         <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-cyan-400" />
         <span>Back</span>
@@ -428,9 +428,9 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
             </motion.div>
             
             {/* 1. Sign up with Google (with UniWork Liquid Ambient Aura) */}
-            <div className="relative group">
+            <div className="relative group p-1">
               {/* Google-style Deep Volumetric UniWork Liquid Ambient Aura */}
-              <UniWorkAuraGlow active={delayedButtonGlow === 'signup'} pillClassName="rounded-full" />
+              <UniWorkAuraGlow active={delayedButtonGlow === 'signup'} pillClassName="rounded-full" className="-inset-2 rounded-full pointer-events-none" />
 
               <motion.button
                 type="button"
@@ -474,6 +474,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
                       />
                     </svg>
                     <span>Sign up with Google</span>
+                    <ArrowRight className="w-4 h-4 text-slate-700 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                   </>
                 )}
               </motion.button>
@@ -487,9 +488,9 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
             </div>
 
             {/* 2. Log in with Google (with UniWork Liquid Ambient Aura) */}
-            <div className="relative group">
+            <div className="relative group p-1">
               {/* Google-style Deep Volumetric UniWork Liquid Ambient Aura */}
-              <UniWorkAuraGlow active={delayedButtonGlow === 'signin'} pillClassName="rounded-full" />
+              <UniWorkAuraGlow active={delayedButtonGlow === 'signin'} pillClassName="rounded-full" className="-inset-2 rounded-full pointer-events-none" />
 
               <motion.button
                 type="button"
@@ -533,6 +534,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
                       />
                     </svg>
                     <span>Log in with Google</span>
+                    <ArrowRight className="w-4 h-4 text-slate-700 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                   </>
                 )}
               </motion.button>

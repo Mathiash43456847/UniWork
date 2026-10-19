@@ -300,7 +300,7 @@ export default function LegalView({ type, setActiveTab }: LegalViewProps) {
                 <span className="text-cyan-400 font-sans tabular-nums">4.</span> Intellectual Property
               </h2>
               <p className="text-sm text-slate-300 leading-relaxed">
-                The UniWork platform, including its proprietary system for detecting productivity levels, global trend algorithms, design, and code, is the exclusive property of Unial (UniWork). You may not copy, modify, or distribute any part of the Service without explicit written permission.
+                The UniWork platform, including its proprietary system for detecting productivity levels, global trend algorithms, design, and code, is the exclusive property of UniWork. You may not copy, modify, or distribute any part of the Service without explicit written permission.
               </p>
             </section>
 
@@ -311,7 +311,7 @@ export default function LegalView({ type, setActiveTab }: LegalViewProps) {
               <div className="space-y-2 text-sm text-slate-300">
                 <p>• The Service is provided on an "AS IS" and "AS AVAILABLE" basis, without warranties of any kind.</p>
                 <p>• We do not guarantee that the Service will be uninterrupted or error-free.</p>
-                <p>• Unial (UniWork) and its employees shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service, including loss of data or productivity tracking errors.</p>
+                <p>• UniWork and its employees shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service, including loss of data or productivity tracking errors.</p>
               </div>
             </section>
 
@@ -365,7 +365,7 @@ export default function LegalView({ type, setActiveTab }: LegalViewProps) {
 
       {/* Footer bar */}
       <footer className="border-t border-slate-800 py-6 px-4 text-center text-xs text-slate-500">
-        <p>© 2026 UniWork (Unial). All rights reserved. • <a href="mailto:management@myuniwork.app" className="text-slate-400 hover:text-white underline">management@myuniwork.app</a></p>
+        <p>© 2026 UniWork. All rights reserved. • <a href="mailto:management@myuniwork.app" className="text-slate-400 hover:text-white underline">management@myuniwork.app</a></p>
       </footer>
     </div>
   );

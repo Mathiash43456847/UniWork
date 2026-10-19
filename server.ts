@@ -193,6 +193,17 @@ if (dbUrl) {
         `);
 
         await client.query(`
+          CREATE TABLE IF NOT EXISTS uniwork_user_profiles (
+            user_id VARCHAR(100) PRIMARY KEY,
+            display_name VARCHAR(100) NOT NULL DEFAULT 'Student',
+            avatar_url TEXT,
+            style VARCHAR(50) DEFAULT 'adventurer',
+            seed VARCHAR(100) DEFAULT 'Atlas',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+
+        await client.query(`
           CREATE TABLE IF NOT EXISTS uniwork_events (
             id VARCHAR(100) PRIMARY KEY,
             user_id VARCHAR(100) NOT NULL,
@@ -232,6 +243,25 @@ if (dbUrl) {
           CREATE INDEX IF NOT EXISTS idx_tasks_user ON uniwork_tasks(user_id);
         `);
 
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS uniwork_focus_rooms (
+            code VARCHAR(10) PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            creator_user_id VARCHAR(100) NOT NULL,
+            created_at_ms BIGINT NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS uniwork_focus_memberships (
+            user_id VARCHAR(100) NOT NULL,
+            room_code VARCHAR(10) NOT NULL,
+            PRIMARY KEY (user_id, room_code)
+          );
+          CREATE TABLE IF NOT EXISTS uniwork_focus_custom_names (
+            user_id VARCHAR(100) NOT NULL,
+            room_code VARCHAR(10) NOT NULL,
+            custom_name VARCHAR(255) NOT NULL,
+            PRIMARY KEY (user_id, room_code)
+          );
+        `);
         await client.query(`
           CREATE TABLE IF NOT EXISTS uniwork_tags (
             id VARCHAR(100) PRIMARY KEY,
@@ -440,6 +470,14 @@ if (dbUrl) {
           INSERT INTO uniwork_admin_settings (key, value)
           VALUES ('security_mode', 'lockdown')
           ON CONFLICT (key) DO NOTHING;
+
+          CREATE TABLE IF NOT EXISTS uniwork_competitor_transforms (
+            id VARCHAR(50) PRIMARY KEY,
+            x INT NOT NULL DEFAULT 0,
+            y INT NOT NULL DEFAULT 0,
+            scale NUMERIC(4,2) NOT NULL DEFAULT 1,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
         `);
 
         console.log("Multi-user Postgres database tables initialized and verified cleanly.");
@@ -525,6 +563,47 @@ app.get("/api/db-status", async (req, res) => {
       connected: false, 
       error: err.message || "Database connection test failed." 
     });
+  }
+});
+
+// DELETE /api/account - Secure server-side account and data deletion
+app.delete("/api/account", async (req, res) => {
+  const userId = String(req.query.userId || req.headers['x-user-id'] || "").trim();
+  if (!userId) {
+    return res.status(400).json({ success: false, error: "Unauthorized: Missing user ID verification." });
+  }
+
+  if (pool) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const userCheck = await client.query("SELECT id FROM uniwork_users WHERE id = $1", [userId]);
+      if (userCheck.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ success: false, error: "Authorization failed: User account not found." });
+      }
+
+      await client.query("DELETE FROM uniwork_focus_sessions WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_focus_points_logs WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_tasks WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_events WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_goals WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_task_groups WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_tags WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM uniwork_users WHERE id = $1", [userId]);
+
+      await client.query("COMMIT");
+      broadcastUpdate();
+      return res.json({ success: true, message: "Account and associated data deleted successfully." });
+    } catch (err: any) {
+      await client.query("ROLLBACK");
+      console.error("Account deletion error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to delete account." });
+    } finally {
+      client.release();
+    }
+  } else {
+    return res.status(503).json({ success: false, error: "Database unavailable." });
   }
 });
 
@@ -1775,7 +1854,34 @@ function calculateUniWorkPoints(plannedMin: number, actualMin: number): number {
 }
 
 app.post("/api/focus/session/complete", async (req, res) => {
-  const { taskId, userId = "usr-mathias-cheow-primary", plannedMinutes = 25, actualMinutes = 25 } = req.body;
+  const { taskId, userId = "usr-mathias-cheow-primary", plannedMinutes = 25, actualMinutes = 25, status, isIncomplete } = req.body;
+
+  // If ended as incomplete or cancelled, clear server session without awarding points
+  if (status === 'incomplete' || isIncomplete) {
+    if (taskId) {
+      activeServerFocusSessions.delete(`${userId}_${taskId}`);
+    }
+    for (const [mKey, mVal] of Array.from(activeServerFocusSessions.entries())) {
+      if (mVal.userId === userId) {
+        activeServerFocusSessions.delete(mKey);
+      }
+    }
+
+    if (pool) {
+      try {
+        await pool.query("DELETE FROM uniwork_focus_sessions WHERE user_id = $1", [userId]);
+      } catch (err) {
+        console.warn("DB focus session delete incomplete error:", err);
+      }
+    }
+
+    broadcastUpdate();
+    return res.json({
+      success: true,
+      pointsEarned: 0,
+      message: "Focus session ended as incomplete",
+    });
+  }
 
   let finalPlanned = Number(plannedMinutes) || 25;
   let finalActual = Number(actualMinutes) || 25;
@@ -1925,22 +2031,55 @@ const inMemoryMemberships = new Map<string, Set<string>>();
 const inMemoryCustomRoomNames = new Map<string, Map<string, string>>();
 const inMemoryRoomPresence = new Map<string, Map<string, PresenceRecord>>();
 
-function getUserRoomCodes(userId: string): string[] {
-  let userSet = inMemoryMemberships.get(userId);
-  if (!userSet) {
-    userSet = new Set<string>(["000000"]);
-    inMemoryMemberships.set(userId, userSet);
-  } else if (!userSet.has("000000")) {
-    userSet.add("000000");
+async function getUserRoomCodes(userId: string): Promise<string[]> {
+  const codes = new Set<string>(["000000"]);
+  if (pool) {
+    try {
+      const res = await pool.query("SELECT room_code FROM uniwork_focus_memberships WHERE user_id = $1", [userId]);
+      res.rows.forEach(r => codes.add(r.room_code));
+    } catch (err) {
+      console.warn("DB get user room codes error:", err);
+    }
   }
-  return Array.from(userSet);
+  let userSet = inMemoryMemberships.get(userId);
+  if (userSet) {
+    userSet.forEach(c => codes.add(c));
+  }
+  return Array.from(codes);
 }
 
 // GET /api/focus/rooms - List all rooms joined by the user
 app.get("/api/focus/rooms", async (req, res) => {
   const userId = String(req.query.userId || "usr-mathias-cheow-primary");
-  const userRoomCodes = getUserRoomCodes(userId);
-  const userNamesMap = inMemoryCustomRoomNames.get(userId) || new Map<string, string>();
+  const userRoomCodes = await getUserRoomCodes(userId);
+
+  const userNamesMap = new Map<string, string>();
+  if (pool) {
+    try {
+      const resNames = await pool.query("SELECT room_code, custom_name FROM uniwork_focus_custom_names WHERE user_id = $1", [userId]);
+      resNames.rows.forEach(r => userNamesMap.set(r.room_code, r.custom_name));
+    } catch (e) {}
+  }
+  const memMap = inMemoryCustomRoomNames.get(userId);
+  if (memMap) {
+    memMap.forEach((k, v) => userNamesMap.set(v, k));
+  }
+
+  if (pool) {
+    try {
+      const resRooms = await pool.query("SELECT code, name, creator_user_id, created_at_ms FROM uniwork_focus_rooms");
+      resRooms.rows.forEach(r => {
+        if (!inMemoryRooms.has(r.code)) {
+          inMemoryRooms.set(r.code, {
+            code: r.code,
+            name: r.name,
+            creatorUserId: r.creator_user_id,
+            createdAtMs: Number(r.created_at_ms),
+          });
+        }
+      });
+    } catch (e) {}
+  }
 
   const threshold = Date.now() - 45000;
   const roomsList = [];
@@ -1953,13 +2092,10 @@ app.get("/api/focus/rooms", async (req, res) => {
     const roomPresence = inMemoryRoomPresence.get(code);
     if (roomPresence) {
       for (const p of roomPresence.values()) {
-        if (p.lastHeartbeatMs >= threshold) {
+        if (p.userId !== userId && p.lastHeartbeatMs >= threshold) {
           peerCount++;
         }
       }
-    }
-    if (code === "000000" && peerCount === 0) {
-      peerCount = 1;
     }
 
     roomsList.push({
@@ -1967,7 +2103,7 @@ app.get("/api/focus/rooms", async (req, res) => {
       name: roomName,
       isGlobal: code === "000000",
       creatorUserId: r ? r.creatorUserId : "system",
-      peerCount: Math.max(1, peerCount),
+      peerCount,
     });
   }
 
@@ -1981,7 +2117,18 @@ app.get("/api/focus/rooms/validate", async (req, res) => {
     return res.json({ success: false, exists: false, error: "Please enter a 6-digit focus room code." });
   }
 
-  const r = inMemoryRooms.get(code);
+  let r = inMemoryRooms.get(code);
+  if (!r && code !== "000000" && pool) {
+    try {
+      const dbRes = await pool.query("SELECT code, name, creator_user_id, created_at_ms FROM uniwork_focus_rooms WHERE code = $1", [code]);
+      if (dbRes.rows.length > 0) {
+        const row = dbRes.rows[0];
+        r = { code: row.code, name: row.name, creatorUserId: row.creator_user_id, createdAtMs: Number(row.created_at_ms) };
+        inMemoryRooms.set(code, r);
+      }
+    } catch (e) {}
+  }
+
   if (r || code === "000000") {
     return res.json({
       success: true,
@@ -2011,7 +2158,17 @@ app.post("/api/focus/rooms/create", async (req, res) => {
   do {
     newCode = Math.floor(100000 + Math.random() * 900000).toString();
     attempts++;
-  } while (inMemoryRooms.has(newCode) && attempts < 100);
+  } while ((inMemoryRooms.has(newCode) || await roomExistsInDb(newCode)) && attempts < 100);
+
+  async function roomExistsInDb(c: string) {
+    if (!pool) return false;
+    try {
+      const dbRes = await pool.query("SELECT code FROM uniwork_focus_rooms WHERE code = $1", [c]);
+      return dbRes.rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
 
   const newRoom: FocusRoomRecord = {
     code: newCode,
@@ -2022,10 +2179,27 @@ app.post("/api/focus/rooms/create", async (req, res) => {
 
   inMemoryRooms.set(newCode, newRoom);
 
-  const codes = getUserRoomCodes(userId);
-  if (!codes.includes(newCode)) {
-    inMemoryMemberships.get(userId)?.add(newCode);
+  if (pool) {
+    try {
+      await pool.query(
+        "INSERT INTO uniwork_focus_rooms (code, name, creator_user_id, created_at_ms) VALUES ($1, $2, $3, $4) ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name",
+        [newCode, roomName, userId, newRoom.createdAtMs]
+      );
+      await pool.query(
+        "INSERT INTO uniwork_focus_memberships (user_id, room_code) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [userId, newCode]
+      );
+    } catch (err) {
+      console.warn("DB create focus room error:", err);
+    }
   }
+
+  let userSet = inMemoryMemberships.get(userId);
+  if (!userSet) {
+    userSet = new Set<string>(["000000"]);
+    inMemoryMemberships.set(userId, userSet);
+  }
+  userSet.add(newCode);
 
   return res.json({
     success: true,
@@ -2034,7 +2208,7 @@ app.post("/api/focus/rooms/create", async (req, res) => {
       name: roomName,
       isGlobal: false,
       creatorUserId: userId,
-      peerCount: 1,
+      peerCount: 0,
     },
   });
 });
@@ -2048,7 +2222,18 @@ app.post("/api/focus/rooms/join", async (req, res) => {
     return res.json({ success: false, error: "Please enter a 6-digit focus room code." });
   }
 
-  const r = inMemoryRooms.get(code);
+  let r = inMemoryRooms.get(code);
+  if (!r && code !== "000000" && pool) {
+    try {
+      const dbRes = await pool.query("SELECT code, name, creator_user_id, created_at_ms FROM uniwork_focus_rooms WHERE code = $1", [code]);
+      if (dbRes.rows.length > 0) {
+        const row = dbRes.rows[0];
+        r = { code: row.code, name: row.name, creatorUserId: row.creator_user_id, createdAtMs: Number(row.created_at_ms) };
+        inMemoryRooms.set(code, r);
+      }
+    } catch (e) {}
+  }
+
   if (!r && code !== "000000") {
     return res.json({
       success: false,
@@ -2056,10 +2241,23 @@ app.post("/api/focus/rooms/join", async (req, res) => {
     });
   }
 
-  const codes = getUserRoomCodes(userId);
-  if (!codes.includes(code)) {
-    inMemoryMemberships.get(userId)?.add(code);
+  if (pool) {
+    try {
+      await pool.query(
+        "INSERT INTO uniwork_focus_memberships (user_id, room_code) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [userId, code]
+      );
+    } catch (err) {
+      console.warn("DB join focus room error:", err);
+    }
   }
+
+  let userSet = inMemoryMemberships.get(userId);
+  if (!userSet) {
+    userSet = new Set<string>(["000000"]);
+    inMemoryMemberships.set(userId, userSet);
+  }
+  userSet.add(code);
 
   const roomName = r ? r.name : "Global Focus Room";
 
@@ -2070,7 +2268,7 @@ app.post("/api/focus/rooms/join", async (req, res) => {
       name: roomName,
       isGlobal: code === "000000",
       creatorUserId: r ? r.creatorUserId : "system",
-      peerCount: 1,
+      peerCount: 0,
     },
   });
 });
@@ -2082,6 +2280,14 @@ app.delete("/api/focus/rooms/:code", async (req, res) => {
 
   if (code === "000000") {
     return res.status(400).json({ success: false, error: "The Global Focus Room cannot be deleted." });
+  }
+
+  if (pool) {
+    try {
+      await pool.query("DELETE FROM uniwork_focus_memberships WHERE user_id = $1 AND room_code = $2", [userId, code]);
+    } catch (err) {
+      console.warn("DB leave focus room error:", err);
+    }
   }
 
   const set = inMemoryMemberships.get(userId);
@@ -2109,6 +2315,21 @@ app.post("/api/focus/rooms/rename", async (req, res) => {
   const r = inMemoryRooms.get(code);
   if (r) {
     r.name = name;
+  }
+
+  if (pool) {
+    try {
+      await pool.query(
+        "INSERT INTO uniwork_focus_custom_names (user_id, room_code, custom_name) VALUES ($1, $2, $3) ON CONFLICT (user_id, room_code) DO UPDATE SET custom_name = EXCLUDED.custom_name",
+        [userId, code, name]
+      );
+      await pool.query(
+        "UPDATE uniwork_focus_rooms SET name = $1 WHERE code = $2 AND creator_user_id = $3",
+        [name, code, userId]
+      );
+    } catch (err) {
+      console.warn("DB rename focus room error:", err);
+    }
   }
 
   let userMap = inMemoryCustomRoomNames.get(userId);
@@ -2366,6 +2587,53 @@ app.post("/api/user/avatar", async (req, res) => {
   }
 
   return res.json({ success: true, avatarUrl, style, seed });
+});
+
+app.get("/api/user/profile", async (req, res) => {
+  const userId = String(req.query.userId || "usr-mathias-cheow-primary");
+  let profile = { displayName: 'Student', avatarUrl: '', style: 'adventurer', seed: 'Atlas' };
+  if (pool) {
+    try {
+      const dbRes = await pool.query("SELECT display_name, avatar_url, style, seed FROM uniwork_user_profiles WHERE user_id = $1", [userId]);
+      if (dbRes.rows.length > 0) {
+        const row = dbRes.rows[0];
+        profile = {
+          displayName: row.display_name || 'Student',
+          avatarUrl: row.avatar_url || '',
+          style: row.style || 'adventurer',
+          seed: row.seed || 'Atlas',
+        };
+      }
+    } catch (e) {
+      console.warn("DB get user profile error:", e);
+    }
+  }
+  return res.json({ success: true, ...profile });
+});
+
+app.post("/api/user/profile", async (req, res) => {
+  const { userId = "usr-mathias-cheow-primary", userName, displayName, avatarUrl, style, seed } = req.body;
+  const nameToSave = (displayName || userName || "Student").trim();
+
+  if (pool) {
+    try {
+      await pool.query(
+        `INSERT INTO uniwork_user_profiles (user_id, display_name, avatar_url, style, seed, updated_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE SET
+           display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), uniwork_user_profiles.display_name),
+           avatar_url = COALESCE(EXCLUDED.avatar_url, uniwork_user_profiles.avatar_url),
+           style = COALESCE(EXCLUDED.style, uniwork_user_profiles.style),
+           seed = COALESCE(EXCLUDED.seed, uniwork_user_profiles.seed),
+           updated_at = CURRENT_TIMESTAMP`,
+        [userId, nameToSave, avatarUrl || null, style || 'adventurer', seed || 'Atlas']
+      );
+    } catch (err) {
+      console.warn("DB save user profile error:", err);
+    }
+  }
+
+  return res.json({ success: true, displayName: nameToSave });
 });
 
 // Validate student display name uniqueness
@@ -3239,6 +3507,82 @@ app.post("/api/admin/settings", async (req, res) => {
 
   broadcastUpdate();
   return res.json({ success: true, key, value: cleanValue });
+});
+
+// In-memory fallback cache for competitor transforms
+const inMemoryTransforms: Record<string, { x: number; y: number; scale: number }> = {
+  'google-calendar': { x: 0, y: 0, scale: 1 },
+  'ypt': { x: -10, y: 0, scale: 1 },
+  'ticktick': { x: -1, y: 0, scale: 1 },
+  'forest': { x: -2, y: 0, scale: 1 },
+};
+
+app.get("/api/competitor-transforms", async (req, res) => {
+  let result = { ...inMemoryTransforms };
+
+  // File fallback
+  const backupFile = path.join(process.cwd(), "company_logo", "transforms.json");
+  if (fs.existsSync(backupFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(backupFile, "utf-8"));
+      result = { ...result, ...data };
+    } catch {}
+  }
+
+  // Database fetch
+  if (pool) {
+    try {
+      const dbRes = await pool.query("SELECT id, x, y, scale FROM uniwork_competitor_transforms");
+      if (dbRes.rows && dbRes.rows.length > 0) {
+        dbRes.rows.forEach((r: any) => {
+          result[r.id] = { x: Number(r.x), y: Number(r.y), scale: Number(r.scale) };
+        });
+      }
+    } catch (err) {
+      console.warn("DB fetch competitor transforms error, using cache/file:", err);
+    }
+  }
+
+  return res.json({ success: true, transforms: result });
+});
+
+app.post("/api/competitor-transforms", async (req, res) => {
+  const { transforms } = req.body;
+  if (!transforms || typeof transforms !== "object") {
+    return res.status(400).json({ success: false, error: "transforms object required" });
+  }
+
+  // Update memory
+  Object.assign(inMemoryTransforms, transforms);
+
+  // Write file backup
+  try {
+    const backupDir = path.join(process.cwd(), "company_logo");
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(backupDir, "transforms.json"), JSON.stringify(transforms, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write transforms.json backup file:", err);
+  }
+
+  // Save to Database
+  if (pool) {
+    try {
+      for (const [id, t] of Object.entries(transforms as Record<string, any>)) {
+        await pool.query(
+          `INSERT INTO uniwork_competitor_transforms (id, x, y, scale, updated_at)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+           ON CONFLICT (id) DO UPDATE SET x = EXCLUDED.x, y = EXCLUDED.y, scale = EXCLUDED.scale, updated_at = CURRENT_TIMESTAMP`,
+          [id, Math.round(t.x || 0), Math.round(t.y || 0), Number(t.scale || 1)]
+        );
+      }
+    } catch (err) {
+      console.warn("DB save competitor transforms error:", err);
+    }
+  }
+
+  return res.json({ success: true, transforms });
 });
 
 // --- Vite Middleware Integration ---

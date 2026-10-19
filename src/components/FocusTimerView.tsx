@@ -161,28 +161,39 @@ export const FocusTimerView: React.FC<FocusTimerViewProps> = ({
   const [pauseNoticeMessage, setPauseNoticeMessage] = useState<string | null>(null);
 
   // Handle Play/Pause or Start Pending Task
-  const handleTogglePlayPause = () => {
+  const handleTogglePlayPause = async () => {
     if (isLockMode) return;
 
     if (isPendingStart) {
       setIsPendingStart(false);
       setIsRunning(true);
       setElapsedSeconds(initialElapsed);
-      fetch('/api/focus/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId,
-          userId,
-          plannedDurationSec: initialCalculated.plannedSec,
-          initialOvertimeSec: initialCalculated.initialOvertime,
-        }),
-      }).catch((err) => console.warn('Server session init failed:', err));
+      try {
+        const res = await fetch('/api/focus/session/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId,
+            userId,
+            plannedDurationSec: initialCalculated.plannedSec,
+            initialOvertimeSec: initialCalculated.initialOvertime,
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.session) {
+          setSecondsRemaining(data.session.remainingSec);
+          setIsRunning(data.session.isRunning);
+          localStorage.setItem(`focus_timer_running_${taskId}`, String(data.session.isRunning));
+        }
+      } catch (err) {
+        console.warn('Server session init failed:', err);
+      }
       return;
     }
 
     const nextRunning = !isRunning;
     setIsRunning(nextRunning);
+    localStorage.setItem(`focus_timer_running_${taskId}`, String(nextRunning));
 
     if (!nextRunning && !isOvertime) {
       const currentCount = parseInt(localStorage.getItem('focus_pause_notice_count') || '0', 10);
@@ -196,11 +207,21 @@ export const FocusTimerView: React.FC<FocusTimerViewProps> = ({
     }
 
     const endpoint = nextRunning ? '/api/focus/session/resume' : '/api/focus/session/pause';
-    fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, userId }),
-    }).catch((err) => console.warn('Failed to update server session state:', err));
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, userId }),
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        setSecondsRemaining(data.session.remainingSec);
+        setIsRunning(data.session.isRunning);
+        localStorage.setItem(`focus_timer_running_${taskId}`, String(data.session.isRunning));
+      }
+    } catch (err) {
+      console.warn('Failed to update server session state:', err);
+    }
   };
 
   // Dynamic Wave Rings

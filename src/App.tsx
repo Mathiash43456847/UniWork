@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, AlarmClockCheck, CheckSquare, Target, Settings, BarChart2 } from 'lucide-react';
+import { Calendar, AlarmClockCheck, CheckSquare, Target, Settings, BarChart2, Sparkles } from 'lucide-react';
 import { Tag, CalendarEvent, Task, ActiveTab, TaskStatus, TaskGroup, Goal, User, getLocalISODate } from './types';
 import Sidebar from './components/Sidebar';
 import CalendarView from './components/CalendarView';
@@ -125,9 +125,9 @@ export default function App() {
   // Admin Security States
   const [adminPassword, setAdminPassword] = useState<string>(() => {
     try {
-      return localStorage.getItem('uniwork_admin_pw') || '10420120';
+      return localStorage.getItem('uniwork_admin_pw') || '';
     } catch {
-      return '10420120';
+      return '';
     }
   });
 
@@ -138,7 +138,7 @@ export default function App() {
     } catch {
       // ignore
     }
-    return ['usr_g_8cced70b14994d07'];
+    return [];
   });
 
   const [isGuideModeArmed, setIsGuideModeArmed] = useState<boolean>(() => {
@@ -360,7 +360,7 @@ export default function App() {
 
     if (urlTab) {
       // Whitelist public legal and about pages
-      if (!hasUser && !['about', 'privacy', 'terms'].includes(urlTab)) {
+      if (!hasUser && !['about', 'privacy', 'terms', 'focus'].includes(urlTab)) {
         return 'about';
       }
       return urlTab;
@@ -368,6 +368,16 @@ export default function App() {
 
     // Default: 'calendar' if authenticated, otherwise 'about'
     return hasUser ? 'calendar' : 'about';
+  });
+
+  const [initialFocusRoomCode, setInitialFocusRoomCode] = useState<string | null>(() => {
+    try {
+      const match = window.location.pathname.match(/^\/focus\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) return match[1];
+      return null;
+    } catch {
+      return null;
+    }
   });
 
   // Safe wrapper for changing active tab that synchronizes the browser address bar & history
@@ -402,7 +412,7 @@ export default function App() {
       const hasUser = !!localStorage.getItem('uniwork_user_session');
 
       if (urlTab) {
-        if (!hasUser && !['about', 'privacy', 'terms'].includes(urlTab)) {
+        if (!hasUser && !['about', 'privacy', 'terms', 'focus'].includes(urlTab)) {
           setActiveTabState('about');
           window.history.replaceState({ tab: 'about' }, '', '/about');
         } else {
@@ -470,7 +480,7 @@ export default function App() {
   };
 
   const handleDeleteAccountAndData = async () => {
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     try {
       // 1. Call server API to delete account and all rows from PostgreSQL database tables
       await fetch(`/api/account?userId=${encodeURIComponent(userId)}`, {
@@ -521,6 +531,17 @@ export default function App() {
     return 'Laptop';
   });
 
+  const [deviceOverride, setDeviceOverride] = useState<'auto' | 'Phone' | 'Tablet' | 'Laptop'>(() => {
+    return (localStorage.getItem('uniwork_device_override') as any) || 'auto';
+  });
+
+  const handleSetDeviceOverride = (mode: 'auto' | 'Phone' | 'Tablet' | 'Laptop') => {
+    setDeviceOverride(mode);
+    localStorage.setItem('uniwork_device_override', mode);
+  };
+
+  const effectiveDeviceType = deviceOverride !== 'auto' ? deviceOverride : deviceType;
+
   const [screenSize, setScreenSize] = useState<{ width: number; height: number }>({
     width: typeof window !== 'undefined' ? window.innerWidth : 1440,
     height: typeof window !== 'undefined' ? window.innerHeight : 900,
@@ -553,7 +574,7 @@ export default function App() {
       if (detected === 'Phone' || detected === 'Tablet') {
         setSidebarCollapsed(true);
       } else {
-        if (activeTab !== 'about' && activeTab !== 'focus') {
+        if (activeTab !== 'about') {
           setSidebarCollapsed(false);
         }
       }
@@ -564,12 +585,12 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [activeTab]);
 
-  // Auto-collapse sidebar immediately when About or Focus tab is opened
+  // Auto-collapse sidebar immediately when About page is opened or on mobile/tablet
   useEffect(() => {
-    if (activeTab === 'about' || activeTab === 'focus' || deviceType === 'Phone' || deviceType === 'Tablet') {
+    if (activeTab === 'about' || effectiveDeviceType === 'Phone' || effectiveDeviceType === 'Tablet') {
       setSidebarCollapsed(true);
     }
-  }, [activeTab, deviceType]);
+  }, [activeTab, effectiveDeviceType]);
 
   // Core Data States
   const [tags, setTags] = useState<Tag[]>(() => {
@@ -604,7 +625,7 @@ export default function App() {
 
   // Automatically restore active server-side focus session from PostgreSQL on page reload
   useEffect(() => {
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/focus/active?userId=${encodeURIComponent(userId)}`)
       .then((r) => r.json())
       .then((data) => {
@@ -640,6 +661,7 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'saving' | 'error'>('synced');
   const [toastMessage, setToastMessage] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
+  const [flyingPointsBanner, setFlyingPointsBanner] = useState<{ taskTitle: string; points: number } | null>(null);
   const [calendarGap, setCalendarGap] = useState<number>(2);
   const [snapInterval, setSnapInterval] = useState<number>(10);
   const [recurrenceBehavior, setRecurrenceBehavior] = useState<'ask' | 'one' | 'all'>('ask');
@@ -681,7 +703,7 @@ export default function App() {
   // Safe fetch functions for real-time synchronization with dynamic quiet protection
   const fetchTags = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/tags?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: Tag[]) => {
@@ -743,7 +765,7 @@ export default function App() {
 
   const fetchEvents = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/events?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: CalendarEvent[]) => {
@@ -760,7 +782,7 @@ export default function App() {
 
   const fetchTasks = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/tasks?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: Task[]) => {
@@ -801,7 +823,7 @@ export default function App() {
 
   const fetchGroups = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/groups?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: TaskGroup[]) => {
@@ -818,7 +840,7 @@ export default function App() {
 
   const fetchGoals = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/goals?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: Goal[]) => {
@@ -835,7 +857,7 @@ export default function App() {
 
   const fetchSettings = (force = false) => {
     if (!force && isProtectedFromSync()) return;
-    const userId = currentUser?.id || 'usr-mathias-cheow-primary';
+    const userId = currentUser?.id || null;
     fetch(`/api/settings?userId=${encodeURIComponent(userId)}`)
       .then(res => res.json())
       .then((data: Record<string, string>) => {
@@ -952,7 +974,7 @@ export default function App() {
     showToast('Tag order priority updated', 'success');
   };
 
-  const getActiveUserId = () => currentUser?.id || 'usr-mathias-cheow-primary';
+  const getActiveUserId = () => currentUser?.id || null;
 
   const handleSaveCalendarGap = async (gap: number) => {
     setCalendarGap(gap);
@@ -1575,7 +1597,7 @@ export default function App() {
   // Focus Timer Handlers
   const handleStartTaskInFocus = async (task: Task) => {
     setActiveFocusTask(task);
-    setIsFocusRunning(true);
+    setIsFocusRunning(false); // Only runs when user presses Start Timer in the Focus Room
     setSidebarCollapsed(true);
     setActiveTab('focus');
 
@@ -1766,12 +1788,37 @@ export default function App() {
       );
     }
 
+    if (focusTask) {
+      const calculatedPoints = Math.max(5, Math.round(timeDeltaMinutes * 2));
+      setFlyingPointsBanner({
+        taskTitle: focusTask.title,
+        points: calculatedPoints,
+      });
+      setTimeout(() => {
+        setFlyingPointsBanner(null);
+      }, 4000);
+    }
+
     setActiveFocusTask(null);
+    setIsFocusRunning(false);
     setActiveTab('calendar');
   };
 
   const handleEndFocusIncomplete = () => {
+    if (activeFocusTask) {
+      fetch('/api/focus/session/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: activeFocusTask.id,
+          userId: getActiveUserId(),
+          status: 'incomplete',
+          isIncomplete: true,
+        }),
+      }).catch(() => {});
+    }
     setActiveFocusTask(null);
+    setIsFocusRunning(false);
     setActiveTab('calendar');
   };
 
@@ -2001,8 +2048,32 @@ export default function App() {
         </div>
       )}
 
+      {/* Floating Points Banner: Flies down in the middle displaying [Task Name] · +[Points] pts */}
+      <AnimatePresence>
+        {flyingPointsBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 16, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[999] pointer-events-none select-none max-w-[90vw]"
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full bg-slate-900/95 dark:bg-slate-950/95 text-white border border-cyan-500/40 shadow-2xl backdrop-blur-md">
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span className="text-xs sm:text-sm font-bold text-slate-100 max-w-[160px] sm:max-w-xs truncate">
+                {flyingPointsBanner.taskTitle}
+              </span>
+              <span className="text-cyan-400 font-extrabold text-xs sm:text-sm">·</span>
+              <span className="font-mono font-extrabold text-xs sm:text-sm text-cyan-400 whitespace-nowrap">
+                +{flyingPointsBanner.points} pts
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 2. Main Content Display Area */}
-      <main className={`flex-1 flex flex-col h-full overflow-hidden relative bg-slate-100 dark:bg-[#070A11] ${currentUser && deviceType === 'Phone' ? 'pb-16 md:pb-0' : ''}`} id="larkcal-main-content">
+      <main className={`flex-1 flex flex-col h-full overflow-hidden relative bg-slate-100 dark:bg-[#070A11] ${currentUser && effectiveDeviceType === 'Phone' ? 'pb-16 md:pb-0' : ''}`} id="larkcal-main-content">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
@@ -2041,6 +2112,7 @@ export default function App() {
                 onStartTask={handleStartTaskInFocus}
                 activeFocusTaskId={activeFocusTask?.id || null}
                 isFocusRunning={isFocusRunning}
+                deviceType={effectiveDeviceType}
               />
             ) : activeTab === 'focus' ? (
               <FocusRoomView
@@ -2048,6 +2120,7 @@ export default function App() {
                 allTasks={tasks}
                 tags={tags}
                 userId={currentUser?.id || 'usr-mathias-cheow-primary'}
+                initialRoomCode={initialFocusRoomCode}
                 onCompleteTask={handleCompleteFocusTask}
                 onEndIncomplete={handleEndFocusIncomplete}
                 onTimerRunningChange={(running) => setIsFocusRunning(running)}
@@ -2122,28 +2195,23 @@ export default function App() {
               />
             ) : (
               <SettingsView
-                calendarGap={calendarGap}
-                onSaveCalendarGap={handleSaveCalendarGap}
                 snapInterval={snapInterval}
                 onSaveSnapInterval={handleSaveSnapInterval}
                 recurrenceBehavior={recurrenceBehavior}
                 onSaveRecurrenceBehavior={handleSaveRecurrenceBehavior}
+                tags={tags}
+                onSaveTagsOrder={handleSaveTagsOrder}
                 currentUser={currentUser}
                 onSignOut={handleSignOut}
                 onOpenSignIn={() => setIsSignInModalOpen(true)}
-                tags={tags}
-                onSaveTagsOrder={handleSaveTagsOrder}
                 onDeleteAccountAndData={handleDeleteAccountAndData}
                 setActiveTab={setActiveTab}
                 onViewAboutPage={() => {
                   setIsAboutTabVisible(true);
                   setActiveTab('about');
                 }}
-                themeMode={effectiveThemeMode}
                 themePreference={themePreference}
                 onSetThemePreference={handleSetThemePreference}
-                deviceType={deviceType}
-                screenSize={screenSize}
               />
             )}
           </motion.div>
@@ -2185,7 +2253,7 @@ export default function App() {
       />
 
       {/* Mobile-Adaptive Touch Bottom Tab Bar (Visible only on Phone layout widths) */}
-      {currentUser && deviceType === 'Phone' && (
+      {currentUser && effectiveDeviceType === 'Phone' && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0B0F17]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800/80 h-16 pb-safe flex items-center justify-around select-none">
           {[
             { id: 'calendar', label: 'Calendar', icon: Calendar },

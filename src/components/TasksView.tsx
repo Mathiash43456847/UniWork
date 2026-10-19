@@ -61,6 +61,7 @@ interface TasksViewProps {
   onToggleTaskStatus: (taskId: string) => void;
   sidebarCollapsed?: boolean;
   setSidebarCollapsed?: (collapsed: boolean) => void;
+  selectedDate?: Date | string;
 }
 
 export default function TasksView({
@@ -78,14 +79,28 @@ export default function TasksView({
   onToggleTaskStatus,
   sidebarCollapsed,
   setSidebarCollapsed,
+  selectedDate,
 }: TasksViewProps) {
   const [viewType, setViewType] = useState<TaskViewType>('list');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   
   // Date selection state for Daily Tasks view
-  const [selectedDailyDate, setSelectedDailyDate] = useState<string>(
-    getLocalISODate()
-  );
+  const [selectedDailyDate, setSelectedDailyDate] = useState<string>(() => {
+    if (selectedDate) {
+      if (selectedDate instanceof Date) {
+        return getLocalISODate(selectedDate);
+      }
+      return selectedDate;
+    }
+    return getLocalISODate();
+  });
+
+  useEffect(() => {
+    if (selectedDate) {
+      const dStr = selectedDate instanceof Date ? getLocalISODate(selectedDate) : selectedDate;
+      setSelectedDailyDate(dStr);
+    }
+  }, [selectedDate]);
 
   // New States for 2 Days View and Drag and Drop
   const [dailyViewType, setDailyViewType] = useState<'day' | '2days'>('day');
