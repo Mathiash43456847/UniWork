@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Check, Clock, Edit3, Plus, Sparkles, Play } from 'lucide-react';
 import { CalendarEvent, Task, Tag, CalendarViewType, TaskGroup } from '../types';
 import { COLOR_PRESETS } from './Sidebar';
+import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
 
 interface CalendarViewProps {
   selectedDate: Date;
@@ -37,7 +38,9 @@ interface CalendarViewProps {
   endHour?: number;
   onStartTask?: (task: Task) => void;
   activeFocusTaskId?: string | null;
+  activeFocusTask?: Task | null;
   isFocusRunning?: boolean;
+  onNavigateToFocus?: () => void;
   deviceType?: 'Laptop' | 'Tablet' | 'Phone';
 }
 
@@ -261,7 +264,9 @@ export default function CalendarView({
   endHour = 24,
   onStartTask,
   activeFocusTaskId,
+  activeFocusTask,
   isFocusRunning = false,
+  onNavigateToFocus,
   deviceType = 'Laptop',
 }: CalendarViewProps) {
   const [viewType, setViewType] = useState<CalendarViewType>('three-day');
@@ -1026,12 +1031,12 @@ export default function CalendarView({
     >
       {/* Calendar Header with Navigation and View Selection - Mobile Adaptive */}
       <div className="h-auto md:h-14 py-3 md:py-0 gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] px-4 md:px-6 flex flex-col md:flex-row md:items-center justify-between flex-shrink-0">
-        <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto">
-          <h2 className="text-base md:text-lg font-bold text-slate-800 dark:text-white tracking-tight font-sans min-w-[120px] md:min-w-44">
+        <div className="flex items-center justify-between md:justify-start gap-4 w-full md:w-auto min-w-0 flex-wrap">
+          <h2 className="text-base md:text-lg font-bold text-slate-800 dark:text-white tracking-tight font-sans min-w-[120px] md:min-w-44 shrink-0">
             {selectedDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
           </h2>
  
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shrink-0">
             <button
               onClick={handleToday}
               className="px-2.5 md:px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 hover:shadow-xs rounded-md transition cursor-pointer"
@@ -1055,6 +1060,8 @@ export default function CalendarView({
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          <ActiveTaskHeaderBadge task={activeFocusTask || null} isRunning={isFocusRunning} onClick={onNavigateToFocus} />
         </div>
  
         {/* View Switchers: Day, 3 Days, Week, Month */}

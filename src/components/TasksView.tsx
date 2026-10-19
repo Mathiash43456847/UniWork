@@ -30,6 +30,7 @@ import {
   CornerDownLeft
 } from 'lucide-react';
 import { Task, TaskViewType, TaskStatus, TaskGroup, Goal, getLocalISODate } from '../types';
+import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
 
 const formatTimeRange = (start?: string, end?: string): string => {
   if (!start) return 'Unplanned';
@@ -62,6 +63,9 @@ interface TasksViewProps {
   sidebarCollapsed?: boolean;
   setSidebarCollapsed?: (collapsed: boolean) => void;
   selectedDate?: Date | string;
+  activeFocusTask?: Task | null;
+  isFocusRunning?: boolean;
+  onNavigateToFocus?: () => void;
 }
 
 export default function TasksView({
@@ -80,6 +84,9 @@ export default function TasksView({
   sidebarCollapsed,
   setSidebarCollapsed,
   selectedDate,
+  activeFocusTask,
+  isFocusRunning = false,
+  onNavigateToFocus,
 }: TasksViewProps) {
   const [viewType, setViewType] = useState<TaskViewType>('list');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -1260,11 +1267,12 @@ export default function TasksView({
     <div className="flex-1 flex flex-col bg-slate-50 dark:bg-[#070A11] text-slate-800 dark:text-[#F4F4F5] overflow-hidden font-sans transition-colors duration-200" id="larkcal-tasks-view">
       {/* Task Header Bar */}
       <div className="h-16 px-6 flex items-center justify-between flex-shrink-0 bg-white dark:bg-[#0F172A] border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5 shrink-0">
             <CheckSquare className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
             <span>Tasks</span>
           </h1>
+          <ActiveTaskHeaderBadge task={activeFocusTask || null} isRunning={isFocusRunning} onClick={onNavigateToFocus} />
         </div>
 
         {/* View Switchers (Daily Tasks / All Tasks) */}

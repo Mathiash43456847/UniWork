@@ -29,9 +29,12 @@ import {
   ExternalLink,
   ChevronDown,
   LogOut,
+  Shuffle,
 } from 'lucide-react';
 import { Task, Tag } from '../types';
 import { StudentProfileView, PeerProfile as ExternalPeerProfile } from './StudentProfileView';
+import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
+import { getActiveBotsForRoom } from '../studyBotsData';
 
 interface FocusRoomViewProps {
   task?: Task | null;
@@ -453,6 +456,16 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   const [nameError, setNameError] = useState<string | null>(null);
   const [isSavingName, setIsSavingName] = useState<boolean>(false);
 
+  const PROFILE_SEEDS = ['Atlas', 'Pixel', 'Cyber', 'Astro', 'Ninja', 'Fox', 'Spark', 'Zen', 'Echo', 'Nova', 'Leo', 'Sky', 'Luna', 'Kira', 'Orion', 'Pulse'];
+  const [tempAvatarUrl, setTempAvatarUrl] = useState<string>(userAvatar.avatarUrl);
+  const [tempSeed, setTempSeed] = useState<string>(userAvatar.seed);
+  const [modalSeeds, setModalSeeds] = useState<string[]>(PROFILE_SEEDS.slice(0, 12));
+
+  const handleShuffleModalSeeds = () => {
+    const shuffled = [...PROFILE_SEEDS].sort(() => 0.5 - Math.random());
+    setModalSeeds(shuffled.slice(0, 12));
+  };
+
   // User Points State
   const [userStats, setUserStats] = useState<{ rollingAverage: number; totalLifetimeSessions: number; todayPoints: number }>({
     rollingAverage: 0,
@@ -480,15 +493,40 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
   }, [isPreview, userId]);
 
   // Global & Room Peers
-  const [peers, setPeers] = useState<PeerProfile[]>(() => (isPreview ? DEFAULT_PREVIEW_PEERS['000000'] : []));
+  const [peers, setPeers] = useState<PeerProfile[]>(() => {
+    const bots = getActiveBotsForRoom('000000');
+    return bots.map(b => ({
+      id: b.id,
+      name: b.name,
+      avatarUrl: b.avatarUrl,
+      points: b.points,
+      status: b.status,
+      timeLeftMinutes: b.timeLeftMinutes,
+      studyDurationFormatted: b.studyDurationFormatted,
+      isBot: true,
+      major: b.major,
+    }));
+  });
   const [selectedPeer, setSelectedPeer] = useState<PeerProfile | null>(null);
 
-  // Sync preview peers when room changes in preview mode
+  // Sync room peers when room changes
   useEffect(() => {
-    if (isPreview && activeRoomCode) {
-      setPeers(DEFAULT_PREVIEW_PEERS[activeRoomCode] || DEFAULT_PREVIEW_PEERS['000000']);
+    if (activeRoomCode) {
+      const bots = getActiveBotsForRoom(activeRoomCode);
+      const mapped = bots.map(b => ({
+        id: b.id,
+        name: b.name,
+        avatarUrl: b.avatarUrl,
+        points: b.points,
+        status: b.status,
+        timeLeftMinutes: b.timeLeftMinutes,
+        studyDurationFormatted: b.studyDurationFormatted,
+        isBot: true,
+        major: b.major,
+      }));
+      setPeers(mapped);
     }
-  }, [isPreview, activeRoomCode]);
+  }, [activeRoomCode]);
 
   // Fetch User Rooms
   const fetchRooms = useCallback(async () => {
@@ -516,6 +554,36 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     const q = roomSearchQuery.toLowerCase().trim();
     return rooms.filter((r) => r.name.toLowerCase().includes(q) || r.code.includes(q));
   }, [rooms, roomSearchQuery]);
+
+  // Calendar Time Block Time-Left Lock
+  const calendarMinutesLeft = useMemo(() => {
+    if (!effectiveTask || !effectiveTask.endTime) return null;
+    const [eh, em] = effectiveTask.endTime.split(':').map(Number);
+    if (isNaN(eh) || isNaN(em)) return null;
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const endMins = eh * 60 + em;
+    return Math.max(0, endMins - currentMins);
+  }, [effectiveTask]);
+
+  // 30-Second Periodic Point Calculation & Sync
+  useEffect(() => {
+    if (isPreview || !isRunning || !userId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/focus/points/stats?userId=${encodeURIComponent(userId)}`);
+        const d = await res.json();
+        if (d.success) {
+          setUserStats({
+            rollingAverage: d.rollingAverage,
+            totalLifetimeSessions: d.totalLifetimeSessions,
+            todayPoints: d.todayPoints,
+          });
+        }
+      } catch {}
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isPreview, isRunning, userId]);
 
   // URL Parsing & Route Matching
   useEffect(() => {
@@ -589,15 +657,45 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
 
   // Fetch Peers for current Active Room
   const fetchPeers = useCallback(() => {
-    if (isPreview || !activeRoomCode) return;
+    if (!activeRoomCode) return;
+    const bots = getActiveBotsForRoom(activeRoomCode);
+    const mappedBots = bots.map(b => ({
+      id: b.id,
+      name: b.name,
+      avatarUrl: b.avatarUrl,
+      points: b.points,
+      status: b.status,
+      timeLeftMinutes: b.timeLeftMinutes,
+      studyDurationFormatted: b.studyDurationFormatted,
+      isBot: true,
+      major: b.major,
+    }));
+
+    if (isPreview) {
+      setPeers(mappedBots);
+      return;
+    }
+
     fetch(`/api/focus/room/peers?roomCode=${encodeURIComponent(activeRoomCode)}&userId=${encodeURIComponent(userId)}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.success && Array.isArray(d.peers)) {
-          setPeers(d.peers);
+          // Combine server peers with active bots if not already present
+          const serverPeers = d.peers;
+          const combined = [...serverPeers];
+          for (const bot of mappedBots) {
+            if (!combined.some(p => p.id === bot.id)) {
+              combined.push(bot);
+            }
+          }
+          setPeers(combined);
+        } else {
+          setPeers(mappedBots);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setPeers(mappedBots);
+      });
   }, [isPreview, activeRoomCode, userId]);
 
   useEffect(() => {
@@ -651,18 +749,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     }
   }, [isRunning, onTimerRunningChange]);
 
-  // Fetch Stats & Avatar
-  useEffect(() => {
-    if (isPreview) return;
-    fetch(`/api/user/avatar?userId=${encodeURIComponent(userId)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.avatarUrl) {
-          setUserAvatar({ avatarUrl: d.avatarUrl, style: d.style || 'adventurer', seed: d.seed || 'student' });
-        }
-      })
-      .catch(() => {});
-
+  const fetchUserStats = useCallback(() => {
+    if (isPreview || !userId) return;
     fetch(`/api/focus/points/stats?userId=${encodeURIComponent(userId)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -675,6 +763,21 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         }
       })
       .catch(() => {});
+  }, [isPreview, userId]);
+
+  // Fetch Stats & Avatar
+  useEffect(() => {
+    if (isPreview) return;
+    fetch(`/api/user/avatar?userId=${encodeURIComponent(userId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.avatarUrl) {
+          setUserAvatar({ avatarUrl: d.avatarUrl, style: d.style || 'adventurer', seed: d.seed || 'student' });
+        }
+      })
+      .catch(() => {});
+
+    fetchUserStats();
 
     // Restore active server-side focus session from PostgreSQL
     fetch(`/api/focus/active?userId=${encodeURIComponent(userId)}`)
@@ -1043,7 +1146,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     if (isPreview) return;
 
     try {
-      await fetch('/api/focus/session/pause', {
+      const endpoint = nextState ? '/api/focus/session/resume' : '/api/focus/session/pause';
+      await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1075,6 +1179,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
             actualMinutes: timeDeltaMinutes,
           }),
         });
+        fetchUserStats();
       }
     } catch {}
 
@@ -1141,8 +1246,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     }
 
     setIsSavingName(false);
-    const avatarUrl = `https://api.dicebear.com/7.x/${selectedAvatarStyle}/svg?seed=${encodeURIComponent(newName)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-    setUserAvatar({ avatarUrl, style: selectedAvatarStyle, seed: newName });
+    setUserAvatar({ avatarUrl: tempAvatarUrl, style: selectedAvatarStyle, seed: tempSeed });
     setUserName(newName);
     localStorage.setItem('uniwork_user_name', newName);
     setIsAvatarModalOpen(false);
@@ -1151,12 +1255,12 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       await fetch('/api/user/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, userName: newName, displayName: newName, avatarUrl, style: selectedAvatarStyle, seed: newName }),
+        body: JSON.stringify({ userId, userName: newName, displayName: newName, avatarUrl: tempAvatarUrl, style: selectedAvatarStyle, seed: tempSeed }),
       });
       await fetch('/api/user/avatar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, avatarUrl, style: selectedAvatarStyle, seed: newName }),
+        body: JSON.stringify({ userId, avatarUrl: tempAvatarUrl, style: selectedAvatarStyle, seed: tempSeed }),
       });
     } catch {}
   };
@@ -1262,21 +1366,17 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                   </div>
 
                   {/* Active Task in top bar */}
-                  {effectiveTask && effectiveTask.title && effectiveTask.title !== 'open' && (
-                    <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200 dark:border-slate-800 min-w-0">
-                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0">Task</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[140px] md:max-w-[220px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                        {effectiveTask.title}
-                      </span>
-                    </div>
-                  )}
+                  <ActiveTaskHeaderBadge task={effectiveTask} isRunning={isRunning} />
                 </div>
               ) : (
                 /* Restored Icon & Focus Rooms Title */
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
-                  <AlarmClockCheck className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
-                  <span>Focus Rooms</span>
-                </h1>
+                <div className="flex items-center gap-3 min-w-0">
+                  <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5 shrink-0">
+                    <AlarmClockCheck className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
+                    <span>Focus Rooms</span>
+                  </h1>
+                  <ActiveTaskHeaderBadge task={effectiveTask} isRunning={isRunning} />
+                </div>
               )}
         </div>
 
@@ -1568,7 +1668,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                         </span>
                       ) : (
                         <span className="font-mono font-bold text-[#0066FF] dark:text-[#60A5FA] flex-shrink-0 whitespace-nowrap">
-                          {Math.max(0, Math.ceil((plannedDurationSec - elapsedSeconds) / 60))}m left
+                          {calendarMinutesLeft !== null ? calendarMinutesLeft : Math.max(0, Math.ceil((plannedDurationSec - elapsedSeconds) / 60))}m left
                         </span>
                       )}
                     </div>
@@ -1631,6 +1731,8 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                 type="button"
                 onClick={() => {
                   setTempNameInput(userName);
+                  setTempAvatarUrl(userAvatar.avatarUrl);
+                  setTempSeed(userAvatar.seed);
                   setIsAvatarModalOpen(true);
                 }}
                 className="flex flex-col items-center group cursor-pointer select-none"
@@ -2083,13 +2185,66 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl"
+            className="bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
-            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Edit Your Student Profile
             </h3>
 
-            <form onSubmit={handleSaveUserName} className="space-y-4 mt-3">
+            <form onSubmit={handleSaveUserName} className="space-y-4">
+              {/* Profile Picture Preview & Shuffle */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Profile Picture
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleShuffleModalSeeds}
+                    className="text-xs font-semibold text-[#0066FF] dark:text-[#60A5FA] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>Shuffle Choices</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-center py-1">
+                  <div className="relative w-16 h-16 rounded-full p-0.5 bg-gradient-to-tr from-[#0066FF] via-blue-400 to-sky-300 shadow-md">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 border-2 border-white dark:border-slate-900">
+                      <img src={tempAvatarUrl} alt="Preview" className="w-full h-full object-cover rounded-full" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 12 Avatar Grid */}
+                <div className="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto pr-1">
+                  {modalSeeds.map((seed) => {
+                    const url = `https://api.dicebear.com/7.x/${selectedAvatarStyle}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+                    const isSelected = tempSeed === seed;
+                    return (
+                      <button
+                        key={seed}
+                        type="button"
+                        onClick={() => {
+                          setTempSeed(seed);
+                          setTempAvatarUrl(url);
+                        }}
+                        className={`flex flex-col items-center p-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border transition cursor-pointer hover:border-[#0066FF] ${
+                          isSelected ? 'border-[#0066FF] ring-2 ring-[#0066FF]/20 bg-blue-50/50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-white dark:bg-slate-800 p-0.5 mb-0.5">
+                          <img src={url} alt={seed} className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[45px]">
+                          {seed}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">
                   Display Name
@@ -2101,7 +2256,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                     setTempNameInput(e.target.value);
                     setNameError(null);
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0066FF]"
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-[#0066FF]"
                 />
                 {nameError && (
                   <span className="text-xs font-bold text-rose-600 dark:text-rose-400 block mt-1.5">
@@ -2110,7 +2265,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => setIsAvatarModalOpen(false)}

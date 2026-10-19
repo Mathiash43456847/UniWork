@@ -4,6 +4,7 @@ import fs from "fs";
 import pg from "pg";
 import crypto from "crypto";
 import * as dotenv from "dotenv";
+import { STUDY_BOTS, getActiveBotsForRoom, getSimulatedBotState } from "./src/studyBotsData.ts";
 
 dotenv.config();
 
@@ -59,68 +60,13 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
-});
+// Student Reactions store
+const inMemoryReactions = new Map<string, { thumbsup: number; fire: number; bicep: number }>();
+inMemoryReactions.set("tgest", { thumbsup: 12, fire: 28, bicep: 19 });
 
-// Helper to seed initial workspace defaults (tags, groups, goals, events, tasks) for a user
+// Helper: new users start with a clean slate (no default tasks, goals, or events created automatically)
 async function seedDefaultUserData(client: any, userId: string, timeZone?: string) {
-  const suffix = userId.replace(/[^a-zA-Z0-9]/g, '').slice(-6);
-  const tagWorkId = `tag_work_${suffix}`;
-  const tagPersId = `tag_pers_${suffix}`;
-  const tagUrgId = `tag_urg_${suffix}`;
-  const grp1Id = `grp_main_${suffix}`;
-  const grp2Id = `grp_sub_${suffix}`;
-  const goal1Id = `goal_1_${suffix}`;
-  const goal2Id = `goal_2_${suffix}`;
-
-  // Seed default tags
-  await client.query(
-    `INSERT INTO uniwork_tags (id, user_id, name, color, visible) VALUES
-     ($1, $4, 'Work Project', 'indigo', true),
-     ($2, $4, 'Personal Life', 'green', true),
-     ($3, $4, 'Urgent Milestones', 'rose', true)
-     ON CONFLICT DO NOTHING`,
-    [tagWorkId, tagPersId, tagUrgId, userId]
-  );
-
-  // Seed default groups
-  await client.query(
-    `INSERT INTO uniwork_task_groups (id, user_id, name, color) VALUES
-     ($1, $3, 'Default Group', 'indigo'),
-     ($2, $3, 'Secondary Group', 'emerald')
-     ON CONFLICT DO NOTHING`,
-    [grp1Id, grp2Id, userId]
-  );
-
-  // Seed default goals
-  await client.query(
-    `INSERT INTO uniwork_goals (id, user_id, title, color, time_budget) VALUES
-     ($1, $3, 'Launch Syllabi Productivity Platform', 'indigo', 20),
-     ($2, $3, 'Maintain Active Health & Gym Routine', 'green', 8)
-     ON CONFLICT DO NOTHING`,
-    [goal1Id, goal2Id, userId]
-  );
-
-  const today = getTodayDateString(0, timeZone);
-
-  // Seed default events
-  await client.query(
-    `INSERT INTO uniwork_events (id, user_id, title, description, date, start_time, end_time, tag_id, goal_id) VALUES
-     ($1, $2, 'Syllabi Design Review', 'Go over Google Calendar style event tags and Lark style Kanban boards.', $3, '10:00', '11:30', $4, $5),
-     ($6, $2, 'Gym & Cardio session', 'Keep up with the healthy life streak!', $3, '18:00', '19:00', $7, $8)
-     ON CONFLICT DO NOTHING`,
-    [`ev_1_${suffix}`, userId, today, tagWorkId, goal1Id, `ev_2_${suffix}`, tagPersId, goal2Id]
-  );
-
-  // Seed default tasks
-  await client.query(
-    `INSERT INTO uniwork_tasks (id, user_id, title, description, date, start_time, end_time, status, group_id, goal_id) VALUES
-     ($1, $2, 'Implement editable tags for calendar events', 'Ensure custom colors and renaming are fully supported in the sidebar.', $3, '12:00', '13:00', 'done', $4, $6),
-     ($5, $2, 'Sync calendar tasks with the Kanban board', 'Double check that toggling checkboxes in either tab updates instantly.', $3, '15:00', '16:00', 'todo', $7, $6)
-     ON CONFLICT DO NOTHING`,
-    [`task_1_${suffix}`, userId, today, grp1Id, `task_2_${suffix}`, goal1Id, grp2Id]
-  );
+  // Clean slate for new users: zero sample tasks/events/goals seeded.
 }
 
 // PostgreSQL Connection Pool Setup
@@ -436,6 +382,84 @@ if (dbUrl) {
           ON CONFLICT (id) DO NOTHING;
         `);
         await seedDefaultUserData(client, 'usr-mathias-cheow-primary');
+
+        // Seed 20 Global Realistic Focus Study Bots
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS uniwork_study_bots (
+            id VARCHAR(100) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            avatar_url TEXT NOT NULL,
+            major VARCHAR(100) NOT NULL,
+            archetype VARCHAR(50) NOT NULL,
+            base_points INT NOT NULL DEFAULT 120,
+            preferred_rooms TEXT[] NOT NULL DEFAULT ARRAY['000000'],
+            current_task_title VARCHAR(255) NOT NULL,
+            bio TEXT,
+            total_lifetime_hours INT NOT NULL DEFAULT 40,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE TABLE IF NOT EXISTS uniwork_bot_reactions (
+            bot_id VARCHAR(100) PRIMARY KEY,
+            thumbsup INT NOT NULL DEFAULT 0,
+            fire INT NOT NULL DEFAULT 0,
+            bicep INT NOT NULL DEFAULT 0
+          );
+
+          CREATE TABLE IF NOT EXISTS uniwork_bot_status_log (
+            id VARCHAR(100) PRIMARY KEY,
+            bot_id VARCHAR(100) NOT NULL,
+            bot_name VARCHAR(100) NOT NULL,
+            room_code VARCHAR(10) NOT NULL,
+            status VARCHAR(50) NOT NULL,
+            task_title VARCHAR(255) NOT NULL,
+            duration_formatted VARCHAR(50) NOT NULL,
+            time_left_minutes INT NOT NULL,
+            timestamp_ms BIGINT NOT NULL,
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE INDEX IF NOT EXISTS idx_bot_status_log_bot_time ON uniwork_bot_status_log (bot_id, timestamp_ms);
+        `);
+
+        for (const bot of STUDY_BOTS) {
+          await client.query(
+            `INSERT INTO uniwork_study_bots (id, name, avatar_url, major, archetype, base_points, preferred_rooms, current_task_title, bio, total_lifetime_hours)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               avatar_url = EXCLUDED.avatar_url,
+               major = EXCLUDED.major,
+               archetype = EXCLUDED.archetype,
+               base_points = EXCLUDED.base_points,
+               preferred_rooms = EXCLUDED.preferred_rooms,
+               current_task_title = EXCLUDED.current_task_title,
+               bio = EXCLUDED.bio,
+               total_lifetime_hours = EXCLUDED.total_lifetime_hours`,
+            [
+              bot.id,
+              bot.name,
+              bot.avatarUrl,
+              bot.major,
+              bot.archetype,
+              bot.basePoints,
+              bot.preferredRooms,
+              bot.currentTaskTitle,
+              bot.bio,
+              bot.totalLifetimeHours,
+            ]
+          );
+
+          await client.query(
+            `INSERT INTO uniwork_bot_reactions (bot_id, thumbsup, fire, bicep)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (bot_id) DO NOTHING`,
+            [bot.id, bot.reactions.thumbsup, bot.reactions.fire, bot.reactions.bicep]
+          );
+
+          if (!inMemoryReactions.has(bot.name.toLowerCase())) {
+            inMemoryReactions.set(bot.name.toLowerCase(), { ...bot.reactions });
+          }
+        }
 
         // Admin Accounts with Names (Managed by Super Admin)
         await client.query(`
@@ -1790,10 +1814,37 @@ app.post("/api/focus/session/resume", async (req, res) => {
   }
 
   if (!session) {
-    return res.status(404).json({ success: false, error: "Session not found" });
-  }
+    const planned = 25 * 60;
+    session = {
+      id: `sess_${now}_${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      taskId,
+      startTimeMs: now,
+      plannedDurationSec: planned,
+      isRunning: true,
+      pausedElapsedSec: 0,
+      lastUpdatedMs: now,
+    };
+    activeServerFocusSessions.set(key, session);
 
-  if (!session.isRunning) {
+    if (pool) {
+      try {
+        await pool.query(
+          `INSERT INTO uniwork_focus_sessions (id, user_id, task_id, start_time_ms, planned_duration_sec, is_running, paused_elapsed_sec, last_updated_ms)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (user_id) DO UPDATE SET
+             id = EXCLUDED.id,
+             task_id = EXCLUDED.task_id,
+             start_time_ms = EXCLUDED.start_time_ms,
+             planned_duration_sec = EXCLUDED.planned_duration_sec,
+             is_running = EXCLUDED.is_running,
+             paused_elapsed_sec = EXCLUDED.paused_elapsed_sec,
+             last_updated_ms = EXCLUDED.last_updated_ms`,
+          [session.id, userId, taskId, now, planned, true, 0, now]
+        );
+      } catch (e) {}
+    }
+  } else if (!session.isRunning) {
     session.isRunning = true;
     session.lastUpdatedMs = now;
     activeServerFocusSessions.set(key, session);
@@ -1887,7 +1938,7 @@ app.post("/api/focus/session/complete", async (req, res) => {
   let finalActual = Number(actualMinutes) || 25;
 
   // If in-memory session existed, check its values
-  const activeSess = activeServerFocusSessions.get(`${userId}_${taskId}`);
+  const activeSess = activeServerFocusSessions.get(`${userId}_${taskId}`) || activeServerFocusSessions.get(`${userId}_open`);
   if (activeSess) {
     const calc = calculateServerSessionState(activeSess);
     finalPlanned = Math.max(1, Math.round(calc.plannedDurationSec / 60));
@@ -1961,15 +2012,22 @@ app.get("/api/focus/points/stats", async (req, res) => {
       const sumPoints = parseInt(rollRes.rows[0]?.sum_points || "0", 10);
       rollingAverage = Math.round(sumPoints / 7);
 
+      const totalPtsRes = await pool.query(
+        "SELECT SUM(points_earned) as total_points FROM uniwork_focus_points_logs WHERE user_id = $1",
+        [userId]
+      );
+      const totalPoints = parseInt(totalPtsRes.rows[0]?.total_points || "0", 10);
+
       const todayRes = await pool.query(
-        "SELECT SUM(points_earned) as sum_today FROM uniwork_focus_points_logs WHERE user_id = $1 AND completed_at >= CURRENT_DATE",
+        "SELECT SUM(points_earned) as sum_today FROM uniwork_focus_points_logs WHERE user_id = $1 AND completed_at >= (NOW() - INTERVAL '24 hours')",
         [userId]
       );
       todayPoints = parseInt(todayRes.rows[0]?.sum_today || "0", 10);
 
       return res.json({
         success: true,
-        rollingAverage,
+        totalPoints,
+        rollingAverage: totalPoints > 0 ? totalPoints : rollingAverage,
         totalLifetimeSessions,
         todayPoints,
       });
@@ -1982,10 +2040,11 @@ app.get("/api/focus/points/stats", async (req, res) => {
   const userLogs = inMemoryFocusPointsLogs.filter((l) => l.userId === userId);
   totalLifetimeSessions = userLogs.length;
 
+  const totalPointsMemory = userLogs.reduce((acc, l) => acc + l.pointsEarned, 0);
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recentLogs = userLogs.filter((l) => new Date(l.completedAt).getTime() >= sevenDaysAgo);
   const sumPoints = recentLogs.reduce((acc, l) => acc + l.pointsEarned, 0);
-  rollingAverage = Math.round(sumPoints / 7);
+  rollingAverage = totalPointsMemory > 0 ? totalPointsMemory : Math.round(sumPoints / 7);
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -1995,6 +2054,7 @@ app.get("/api/focus/points/stats", async (req, res) => {
 
   return res.json({
     success: true,
+    totalPoints: totalPointsMemory,
     rollingAverage,
     totalLifetimeSessions,
     todayPoints,
@@ -2097,6 +2157,9 @@ app.get("/api/focus/rooms", async (req, res) => {
         }
       }
     }
+
+    const activeBots = getActiveBotsForRoom(code);
+    peerCount += activeBots.length;
 
     roomsList.push({
       code,
@@ -2405,6 +2468,24 @@ app.get("/api/focus/room/peers", async (req, res) => {
     }
   }
 
+  // Include active simulated study bots
+  const activeBots = getActiveBotsForRoom(code);
+  for (const bot of activeBots) {
+    if (!peers.some(p => p.id === bot.id)) {
+      peers.push({
+        id: bot.id,
+        name: bot.name,
+        avatarUrl: bot.avatarUrl,
+        points: bot.points,
+        status: bot.status,
+        timeLeftMinutes: bot.timeLeftMinutes,
+        studyDurationFormatted: bot.studyDurationFormatted,
+        isBot: true,
+        major: bot.major,
+      });
+    }
+  }
+
   return res.json({
     success: true,
     count: peers.length,
@@ -2412,9 +2493,33 @@ app.get("/api/focus/room/peers", async (req, res) => {
   });
 });
 
-// Student Reactions store
-const inMemoryReactions = new Map<string, { thumbsup: number; fire: number; bicep: number }>();
-inMemoryReactions.set("tgest", { thumbsup: 12, fire: 28, bicep: 19 });
+// GET /api/focus/bots/status-log - Get bot status logs from uniwork_bot_status_log table
+app.get("/api/focus/bots/status-log", async (req, res) => {
+  const botId = String(req.query.botId || "").trim();
+  const limit = parseInt(String(req.query.limit || "50"), 10);
+
+  if (pool) {
+    try {
+      let queryStr = "SELECT id, bot_id, bot_name, room_code, status, task_title, duration_formatted, time_left_minutes, timestamp_ms, recorded_at FROM uniwork_bot_status_log";
+      const params: any[] = [];
+      if (botId) {
+        queryStr += " WHERE bot_id = $1";
+        params.push(botId);
+        queryStr += " ORDER BY timestamp_ms DESC LIMIT $2";
+        params.push(limit);
+      } else {
+        queryStr += " ORDER BY timestamp_ms DESC LIMIT $1";
+        params.push(limit);
+      }
+      const dbRes = await pool.query(queryStr, params);
+      return res.json({ success: true, logs: dbRes.rows });
+    } catch (err) {
+      console.warn("Error fetching bot status logs:", err);
+    }
+  }
+
+  return res.json({ success: true, logs: [] });
+});
 
 // GET /api/focus/student/profile - Fetch full student profile by handle / username
 app.get("/api/focus/student/profile", async (req, res) => {
@@ -3626,6 +3731,27 @@ async function startServer() {
       }
     }
   }
+
+  // Periodic Human Behavior Simulator Logger for 20 Study Bots (runs every 3 minutes)
+  setInterval(async () => {
+    if (!pool) return;
+    try {
+      const now = Date.now();
+      for (const bot of STUDY_BOTS) {
+        const state = getSimulatedBotState(bot, now);
+        if (!state) continue;
+        const logId = `log-${bot.id}-${Math.floor(now / 180000)}`;
+        await pool.query(
+          `INSERT INTO uniwork_bot_status_log (id, bot_id, bot_name, room_code, status, task_title, duration_formatted, time_left_minutes, timestamp_ms)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO NOTHING`,
+          [logId, bot.id, bot.name, state.roomCode, state.status, state.taskTitle, state.studyDurationFormatted, state.timeLeftMinutes, now]
+        );
+      }
+    } catch (err) {
+      console.warn("Bot behavior simulator logger error:", err);
+    }
+  }, 180000);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`UniWork Express backend started at http://0.0.0.0:${PORT}`);

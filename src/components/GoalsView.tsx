@@ -5,6 +5,7 @@ import {
   Calendar, CheckCircle2, Clock, ListTodo, CalendarDays
 } from 'lucide-react';
 import { Goal, CalendarEvent, Task, Tag, TaskGroup, getLocalISODate } from '../types';
+import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
 
 interface GoalsViewProps {
   goals: Goal[];
@@ -16,6 +17,9 @@ interface GoalsViewProps {
   onUpdateGoal: (id: string, updates: Partial<Goal>) => void;
   onDeleteGoal: (id: string) => void;
   onToggleGoalComplete: (id: string) => void;
+  activeFocusTask?: Task | null;
+  isFocusRunning?: boolean;
+  onNavigateToFocus?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -73,6 +77,9 @@ export default function GoalsView({
   onUpdateGoal,
   onDeleteGoal,
   onToggleGoalComplete,
+  activeFocusTask,
+  isFocusRunning = false,
+  onNavigateToFocus,
 }: GoalsViewProps) {
   // New Goal quick inline row input
   const [isAddingGoal, setIsAddingGoal] = useState(false);
@@ -988,21 +995,12 @@ export default function GoalsView({
       
       {/* Title & Compact Fraction Review Bar (Right under Title, No bulky descriptions) */}
       <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3" id="goals-header-bar">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5 shrink-0">
             <Target className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
             <span>Targets</span>
           </h1>
-          {/* Compact fraction review under title */}
-          <div className="flex items-center gap-2.5 text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium flex-wrap">
-            <span>Target-Directed Time:</span>
-            <span className="font-bold text-indigo-600 dark:text-[#60A5FA] font-sans tabular-nums text-sm">{totalGoalHours.toFixed(1)}h</span>
-            <span className="text-slate-400 dark:text-slate-600">/</span>
-            <span className="font-semibold text-slate-700 dark:text-slate-300 font-sans tabular-nums text-sm">{totalAllHours.toFixed(1)}h</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-sans tabular-nums">
-              {goalAlignmentRatio}% Aligned
-            </span>
-          </div>
+          <ActiveTaskHeaderBadge task={activeFocusTask || null} isRunning={isFocusRunning} onClick={onNavigateToFocus} />
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">

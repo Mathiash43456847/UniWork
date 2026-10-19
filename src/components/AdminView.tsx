@@ -191,6 +191,66 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [insightsAccess, setInsightsAccess] = useState<'all' | 'admin'>('all');
   const [isSavingInsightsAccess, setIsSavingInsightsAccess] = useState<boolean>(false);
 
+  // Analytics and Bot Simulation State
+  const [analyticsData, setAnalyticsData] = useState<{
+    totalUsers: number;
+    activeStudyingNow: number;
+    todaySessionsCount: number;
+    todayPointsTotal: number;
+    botSimulationEnabled: boolean;
+    roomsCount: number;
+  }>({
+    totalUsers: 1,
+    activeStudyingNow: 0,
+    todaySessionsCount: 0,
+    todayPointsTotal: 0,
+    botSimulationEnabled: true,
+    roomsCount: 4,
+  });
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch('/api/admin/analytics');
+      const data = await res.json();
+      if (data.success) {
+        setAnalyticsData({
+          totalUsers: data.totalUsers || 1,
+          activeStudyingNow: data.activeStudyingNow || 0,
+          todaySessionsCount: data.todaySessionsCount || 0,
+          todayPointsTotal: data.todayPointsTotal || 0,
+          botSimulationEnabled: data.botSimulationEnabled !== false,
+          roomsCount: data.roomsCount || 4,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch analytics:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isUnlocked && activeSubTab === 'general') {
+      fetchAnalytics();
+      const interval = setInterval(fetchAnalytics, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isUnlocked, activeSubTab]);
+
+  const handleToggleBotSimulation = async (enabled: boolean) => {
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'bot_simulation', value: enabled ? 'true' : 'false' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAnalyticsData(prev => ({ ...prev, botSimulationEnabled: enabled }));
+      }
+    } catch (err) {
+      console.error('Failed to toggle bot simulation:', err);
+    }
+  };
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -665,6 +725,76 @@ export const AdminView: React.FC<AdminViewProps> = ({
       ) : (
         <div className="flex-1 overflow-y-auto p-8 max-w-4xl w-full mx-auto space-y-8">
         
+        {/* Real-Time Analytics & Master Control Card */}
+        <div className="bg-white dark:bg-[#0F172A] rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-800/50 flex items-center justify-center text-[#0066FF] dark:text-[#60A5FA] shrink-0">
+                <BarChart2 className="w-5 h-5 stroke-[2.2px]" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Master Control & Real-Time Analytics</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Monitor live student engagement, active timers, sign-ins, and control focus room study bots.
+                </p>
+              </div>
+            </div>
+
+            {/* Study Bots Master Toggle */}
+            <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 px-4 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+              <div className="text-right">
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Study Bots Simulation</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                  {analyticsData.botSimulationEnabled ? 'Active (20 Bots)' : 'Turned Off'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleBotSimulation(!analyticsData.botSimulationEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden cursor-pointer ${
+                  analyticsData.botSimulationEnabled ? 'bg-[#0066FF]' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title="Toggle Study Bots"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    analyticsData.botSimulationEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Analytics Metric Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+              <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Registered Users</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white font-mono">{analyticsData.totalUsers}</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live accounts
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+              <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Studying Right Now</p>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">{analyticsData.activeStudyingNow}</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">Using active timers</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+              <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Today's Sessions</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white font-mono">{analyticsData.todaySessionsCount}</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">Completed focus blocks</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+              <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Today's Points</p>
+              <p className="text-2xl font-black text-[#0066FF] dark:text-[#60A5FA] font-mono">{analyticsData.todayPointsTotal} pts</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">Earned across community</p>
+            </div>
+          </div>
+        </div>
+
         {/* Interactive Guide System Authoring Card */}
         <div className="bg-white dark:bg-[#0F172A] rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-5">

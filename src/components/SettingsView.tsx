@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Sliders, MessageSquare } from 'lucide-react';
-import { User, Tag, ActiveTab } from '../types';
+import { User, Tag, ActiveTab, Task } from '../types';
 import { ProfileSection } from './settings/ProfileSection';
 import { AppearanceSection } from './settings/AppearanceSection';
 import { CalendarSection } from './settings/CalendarSection';
 import { AccountSection } from './settings/AccountSection';
 import { FeedbackModal } from './settings/FeedbackModal';
+import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
 
 interface SettingsViewProps {
   snapInterval?: number;
@@ -22,6 +23,9 @@ interface SettingsViewProps {
   onViewAboutPage?: () => void;
   themePreference?: 'auto' | 'day' | 'night';
   onSetThemePreference?: (pref: 'auto' | 'day' | 'night') => void;
+  activeFocusTask?: Task | null;
+  isFocusRunning?: boolean;
+  onNavigateToFocus?: () => void;
 }
 
 export default function SettingsView({
@@ -39,6 +43,9 @@ export default function SettingsView({
   onViewAboutPage,
   themePreference = 'auto',
   onSetThemePreference,
+  activeFocusTask,
+  isFocusRunning = false,
+  onNavigateToFocus,
 }: SettingsViewProps) {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
@@ -47,10 +54,13 @@ export default function SettingsView({
       <div className="max-w-3xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
-            <Sliders className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
-            <span>Settings</span>
-          </h2>
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight flex items-center gap-2 shrink-0">
+              <Sliders className="w-6 h-6 text-[#0066FF] dark:text-[#60A5FA]" />
+              <span>Settings</span>
+            </h2>
+            <ActiveTaskHeaderBadge task={activeFocusTask || null} isRunning={isFocusRunning} onClick={onNavigateToFocus} />
+          </div>
         </div>
 
         {/* Section 1: Profile */}

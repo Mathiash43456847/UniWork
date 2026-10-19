@@ -19,7 +19,6 @@ import LegalView from './components/LegalView';
 import InsightsView from './components/InsightsView';
 import { FocusRoomView } from './components/FocusRoomView';
 import { AdminView } from './components/AdminView';
-import { GuideSystem } from './components/GuideSystem';
 import { encryptData, decryptData } from './lib/encryption';
 
 
@@ -974,7 +973,17 @@ export default function App() {
     showToast('Tag order priority updated', 'success');
   };
 
-  const getActiveUserId = () => currentUser?.id || null;
+  const getActiveUserId = (): string => {
+    if (currentUser?.id) return currentUser.id;
+    try {
+      const savedUser = localStorage.getItem('uniwork_user_session');
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        if (u && u.id) return u.id;
+      }
+    } catch {}
+    return 'usr-mathias-cheow-primary';
+  };
 
   const handleSaveCalendarGap = async (gap: number) => {
     setCalendarGap(gap);
@@ -1595,34 +1604,11 @@ export default function App() {
   };
 
   // Focus Timer Handlers
-  const handleStartTaskInFocus = async (task: Task) => {
+  const handleStartTaskInFocus = (task: Task) => {
     setActiveFocusTask(task);
-    setIsFocusRunning(false); // Only runs when user presses Start Timer in the Focus Room
+    setIsFocusRunning(false); // Only runs when user explicitly presses Start Timer in the Focus Room
     setSidebarCollapsed(true);
     setActiveTab('focus');
-
-    let plannedSec = 25 * 60;
-    if (task.startTime && task.endTime) {
-      const [sh, sm] = task.startTime.split(':').map(Number);
-      const [eh, em] = task.endTime.split(':').map(Number);
-      const diff = (eh * 60 + em - (sh * 60 + sm)) * 60;
-      plannedSec = Math.max(5 * 60, diff);
-    }
-
-    const userId = getActiveUserId();
-    try {
-      await fetch('/api/focus/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: task.id,
-          userId,
-          plannedDurationSec: plannedSec,
-        }),
-      });
-    } catch (e) {
-      console.warn('Failed to start server focus session:', e);
-    }
   };
 
   const handleCompleteFocusTask = (
@@ -2111,7 +2097,9 @@ export default function App() {
                 onUpdateModalTimes={handleModalTimeChange}
                 onStartTask={handleStartTaskInFocus}
                 activeFocusTaskId={activeFocusTask?.id || null}
+                activeFocusTask={activeFocusTask}
                 isFocusRunning={isFocusRunning}
+                onNavigateToFocus={() => setActiveTab('focus')}
                 deviceType={effectiveDeviceType}
               />
             ) : activeTab === 'focus' ? (
@@ -2119,7 +2107,7 @@ export default function App() {
                 task={activeFocusTask}
                 allTasks={tasks}
                 tags={tags}
-                userId={currentUser?.id || 'usr-mathias-cheow-primary'}
+                userId={getActiveUserId()}
                 initialRoomCode={initialFocusRoomCode}
                 onCompleteTask={handleCompleteFocusTask}
                 onEndIncomplete={handleEndFocusIncomplete}
@@ -2142,6 +2130,9 @@ export default function App() {
                 onToggleTaskStatus={handleToggleTaskStatus}
                 sidebarCollapsed={sidebarCollapsed}
                 setSidebarCollapsed={setSidebarCollapsed}
+                activeFocusTask={activeFocusTask}
+                isFocusRunning={isFocusRunning}
+                onNavigateToFocus={() => setActiveTab('focus')}
               />
             ) : activeTab === 'goals' ? (
               <GoalsView
@@ -2154,6 +2145,9 @@ export default function App() {
                 onUpdateGoal={handleUpdateGoal}
                 onDeleteGoal={handleDeleteGoal}
                 onToggleGoalComplete={handleToggleGoalComplete}
+                activeFocusTask={activeFocusTask}
+                isFocusRunning={isFocusRunning}
+                onNavigateToFocus={() => setActiveTab('focus')}
               />
             ) : activeTab === 'insights' ? (
               <InsightsView
@@ -2212,6 +2206,9 @@ export default function App() {
                 }}
                 themePreference={themePreference}
                 onSetThemePreference={handleSetThemePreference}
+                activeFocusTask={activeFocusTask}
+                isFocusRunning={isFocusRunning}
+                onNavigateToFocus={() => setActiveTab('focus')}
               />
             )}
           </motion.div>
@@ -2243,13 +2240,6 @@ export default function App() {
         onSaveRecurrenceBehavior={handleSaveRecurrenceBehavior}
         onTimeChange={handleModalTimeChange}
         tasks={tasks}
-      />
-
-      {/* Interactive Guide Authoring & Tour System */}
-      <GuideSystem
-        isGuideModeArmed={isGuideModeArmed}
-        onToggleGuideModeArmed={handleToggleGuideModeArmed}
-        currentUser={currentUser}
       />
 
       {/* Mobile-Adaptive Touch Bottom Tab Bar (Visible only on Phone layout widths) */}
