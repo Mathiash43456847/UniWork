@@ -1200,6 +1200,11 @@ function getOAuthRedirectUri(req: express.Request): string {
   return `${protocol}://${host}/api/auth/google/callback`;
 }
 
+function getOAuthAppOrigin(req: express.Request): string {
+  const redirectUri = getOAuthRedirectUri(req);
+  return redirectUri.replace(/\/api\/auth\/google\/callback\/?$/, '');
+}
+
 app.get("/api/auth/google/url", (req, res) => {
   const intent = (req.query.intent as string) === 'signin' ? 'signin' : 'signup';
   const timeZone = resolveRequestTimeZone(req, req.query.tz as string);
@@ -1229,6 +1234,7 @@ app.get("/api/auth/google/url", (req, res) => {
 
 app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req, res) => {
   const { code, state, error: authError } = req.query;
+  const appOrigin = getOAuthAppOrigin(req);
   
   let intent = 'signup';
   let userTimeZone = 'UTC';
@@ -1264,7 +1270,7 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
           </div>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${authError || "Authentication cancelled."}' }, '*');
+              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${authError || "Authentication cancelled."}' }, '${appOrigin}');
               setTimeout(() => window.close(), 2000);
             }
           </script>
@@ -1341,7 +1347,7 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
                     window.opener.postMessage({
                       type: 'OAUTH_AUTH_ERROR',
                       error: 'No UniWork workspace exists for this account. Please use "Sign up with Google" instead.'
-                    }, '*');
+                    }, '${appOrigin}');
                     setTimeout(() => window.close(), 3000);
                   }
                 </script>
@@ -1389,7 +1395,7 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
           <p style="color: #94a3b8;">Connecting to Private UniWork Vault...</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', user: ${JSON.stringify(profile)} }, '*');
+              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', user: ${JSON.stringify(profile)} }, '${appOrigin}');
               window.close();
             } else {
               window.location.href = '/';
@@ -1419,7 +1425,7 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
               window.opener.postMessage({
                 type: 'OAUTH_AUTH_ERROR',
                 error: '${(err.message || "Failed to commit user to database.").replace(/'/g, "\\'")}'
-              }, '*');
+              }, '${appOrigin}');
               setTimeout(() => window.close(), 3500);
             }
           </script>

@@ -116,23 +116,46 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
     }
   ];
 
+  const oauthWindowRef = useRef<Window | null>(null);
+
   // Listen for OAuth message from Google popup window
   useEffect(() => {
     const handleOAuthMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+      // 1. Validate exact trusted origin appropriate to each environment (same origin as app)
+      if (event.origin !== window.location.origin) {
         return;
       }
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.user) {
+      // 2. Retain reference to opened OAuth popup and verify event.source matches it
+      if (!oauthWindowRef.current || event.source !== oauthWindowRef.current) {
+        return;
+      }
+      // 3. Validate message structure before processing
+      if (!event.data || typeof event.data !== 'object') {
+        return;
+      }
+      const { type, user, error: authError } = event.data;
+      if (typeof type !== 'string') {
+        return;
+      }
+
+      if (type === 'OAUTH_AUTH_SUCCESS' && user) {
         setIsAuthenticating(false);
         setActiveButton(null);
         setShowGoogleChooser(false);
         setError(null);
-        onSignInSuccess(event.data.user);
-      } else if (event.data?.type === 'OAUTH_AUTH_ERROR' || event.data?.type === 'GOOGLE_AUTH_ERROR') {
+        if (oauthWindowRef.current) {
+          try { oauthWindowRef.current.close(); } catch {}
+          oauthWindowRef.current = null;
+        }
+        onSignInSuccess(user);
+      } else if (type === 'OAUTH_AUTH_ERROR' || type === 'GOOGLE_AUTH_ERROR') {
         setIsAuthenticating(false);
         setActiveButton(null);
-        setError(event.data.error || 'Authentication failed. Please try again.');
+        if (oauthWindowRef.current) {
+          try { oauthWindowRef.current.close(); } catch {}
+          oauthWindowRef.current = null;
+        }
+        setError(authError || 'Authentication failed. Please try again.');
       }
     };
     window.addEventListener('message', handleOAuthMessage);
@@ -159,21 +182,40 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
       const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const res = await fetch(`/api/auth/google/url?intent=${intent}&tz=${encodeURIComponent(userTz)}`);
       const data = await res.json();
+      const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('127.0.0.1');
+
       if (data.hasClientId && data.url) {
         const authWindow = window.open(
           data.url,
           'google_oauth_popup',
           'width=550,height=650,top=100,left=100'
         );
+        oauthWindowRef.current = authWindow;
         if (!authWindow) {
+          if (isProduction) {
+            setError('Popup blocked by browser. Please enable popups for this site to sign in with Google.');
+            setShowGoogleChooser(false);
+          } else {
+            setShowGoogleChooser(true);
+          }
+        }
+      } else {
+        if (isProduction) {
+          setError('Google authentication is currently unavailable.');
+          setShowGoogleChooser(false);
+        } else {
           setShowGoogleChooser(true);
         }
+      }
+    } catch (err) {
+      console.warn('OAuth URL fetch error:', err);
+      const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('127.0.0.1');
+      if (isProduction) {
+        setError('Failed to connect to Google OAuth service.');
+        setShowGoogleChooser(false);
       } else {
         setShowGoogleChooser(true);
       }
-    } catch (err) {
-      console.warn('OAuth URL fetch error, falling back to workspace chooser:', err);
-      setShowGoogleChooser(true);
     } finally {
       setIsAuthenticating(false);
       setActiveButton(null);
