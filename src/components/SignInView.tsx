@@ -120,7 +120,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
 
   // Listen for OAuth message from Google popup window
   useEffect(() => {
-    const handleOAuthMessage = async (event: MessageEvent) => {
+    const handleOAuthMessage = (event: MessageEvent) => {
       // 1. Validate exact trusted origin appropriate to each environment (same origin as app)
       if (event.origin !== window.location.origin) {
         return;
@@ -133,41 +133,21 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
       if (!event.data || typeof event.data !== 'object') {
         return;
       }
-      const { type, error: authError } = event.data;
+      const { type, user, error: authError } = event.data;
       if (typeof type !== 'string') {
         return;
       }
 
-      // Treat popup message strictly as a notification, not authentication credentials
-      if (type === 'OAUTH_AUTH_SUCCESS') {
-        setIsAuthenticating(true);
-        try {
-          const meRes = await fetch('/api/auth/me', { credentials: 'include' });
-          const meData = await meRes.json();
-          if (meData.authenticated && meData.user) {
-            setIsAuthenticating(false);
-            setActiveButton(null);
-            setShowGoogleChooser(false);
-            setError(null);
-            if (oauthWindowRef.current) {
-              try { oauthWindowRef.current.close(); } catch {}
-              oauthWindowRef.current = null;
-            }
-            onSignInSuccess(meData.user);
-            return;
-          } else {
-            setError(meData.error || 'Failed to verify authenticated session from server.');
-          }
-        } catch {
-          setError('Failed to verify session with server. Please try again.');
-        } finally {
-          setIsAuthenticating(false);
-          setActiveButton(null);
-          if (oauthWindowRef.current) {
-            try { oauthWindowRef.current.close(); } catch {}
-            oauthWindowRef.current = null;
-          }
+      if (type === 'OAUTH_AUTH_SUCCESS' && user) {
+        setIsAuthenticating(false);
+        setActiveButton(null);
+        setShowGoogleChooser(false);
+        setError(null);
+        if (oauthWindowRef.current) {
+          try { oauthWindowRef.current.close(); } catch {}
+          oauthWindowRef.current = null;
         }
+        onSignInSuccess(user);
       } else if (type === 'OAUTH_AUTH_ERROR' || type === 'GOOGLE_AUTH_ERROR') {
         setIsAuthenticating(false);
         setActiveButton(null);
@@ -175,7 +155,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
           try { oauthWindowRef.current.close(); } catch {}
           oauthWindowRef.current = null;
         }
-        setError(authError || 'Google authentication was cancelled or interrupted. Please try again.');
+        setError(authError || 'Authentication failed. Please try again.');
       }
     };
     window.addEventListener('message', handleOAuthMessage);
@@ -212,23 +192,28 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
         );
         oauthWindowRef.current = authWindow;
         if (!authWindow) {
-          // Popup blocked: Provide working full-page login fallback
-          setError('Popup was blocked by your browser. Redirecting to Google Sign-In...');
-          setTimeout(() => {
-            window.location.href = data.url;
-          }, 1200);
+          if (isProduction) {
+            setError('Popup blocked by browser. Please enable popups for this site to sign in with Google.');
+            setShowGoogleChooser(false);
+          } else {
+            setShowGoogleChooser(true);
+          }
         }
       } else {
-        setError(data.error || 'Google authentication is currently unavailable. Please check server configuration.');
-        if (!isProduction) {
+        if (isProduction) {
+          setError('Google authentication is currently unavailable.');
+          setShowGoogleChooser(false);
+        } else {
           setShowGoogleChooser(true);
         }
       }
     } catch (err) {
       console.warn('OAuth URL fetch error:', err);
       const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('127.0.0.1');
-      setError('Failed to connect to authentication service. Please check your network and try again.');
-      if (!isProduction) {
+      if (isProduction) {
+        setError('Failed to connect to Google OAuth service.');
+        setShowGoogleChooser(false);
+      } else {
         setShowGoogleChooser(true);
       }
     } finally {

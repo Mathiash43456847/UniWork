@@ -131,24 +131,6 @@ export default function App() {
   const [insightsAccessMode, setInsightsAccessMode] = useState<'all' | 'admin'>('all');
   const isInsightsVisible = insightsAccessMode === 'all' || isAdminAuthorized;
 
-  // Verify server session authentication on mount
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success || !data.authenticated) {
-          if (localStorage.getItem('uniwork_user_session')) {
-            localStorage.removeItem('uniwork_user_session');
-            setCurrentUser(null);
-            if (!['about', 'privacy', 'terms', 'focus'].includes(activeTab)) {
-              setActiveTab('about');
-            }
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     const fetchInsightsAccess = () => {
       fetch('/api/settings/insights_access')
