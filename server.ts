@@ -4,6 +4,8 @@ import fs from "fs";
 import pg from "pg";
 import crypto from "crypto";
 import * as dotenv from "dotenv";
+import expressSession from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { STUDY_BOTS, getActiveBotsForRoom, getSimulatedBotState } from "./src/studyBotsData.ts";
 
 dotenv.config();
@@ -50,6 +52,248 @@ const PORT = process.env.PORT && process.env.PORT !== "8080" ? parseInt(process.
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+
+// PostgreSQL Pool Connection check for session store
+const sessionDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_URL;
+let pgPoolForSession: pg.Pool | null = null;
+if (sessionDbUrl) {
+  try {
+    const isLocalOrInternal = sessionDbUrl.includes("localhost") || sessionDbUrl.includes("127.0.0.1") || sessionDbUrl.includes(".railway.internal");
+    pgPoolForSession = new pg.Pool({
+      connectionString: sessionDbUrl.trim().replace(/([?&])channel_binding=[^&]*(&|$)/g, '$1').replace(/[?&]$/, ''),
+      connectionTimeoutMillis: 10000,
+      ssl: isLocalOrInternal ? undefined : { rejectUnauthorized: false }
+    });
+  } catch (e) {
+    console.warn("Session pool init warning:", e);
+  }
+}
+
+const PgSession = connectPgSimple(expressSession);
+app.use(
+  expressSession({
+    store: pgPoolForSession ? new PgSession({
+      pool: pgPoolForSession,
+      tableName: 'uniwork_session',
+      createTableIfMissing: true
+    }) : undefined,
+    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || process.env.RENDER === 'true',
+      sameSite: 'lax',
+      maxAge: 14 * 24 * 60 * 60 * 1000 // 14 days
+    }
+  })
+);
+
+// Authentication & Ownership middleware (Strict session-only verification)
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const userId = (req.session as any)?.userId;
+  if (!userId || typeof userId !== 'string') {
+    return res.status(401).json({ success: false, error: "Unauthorized: Active server session required." });
+  }
+  next();
+}
+
+// --- Production Google OAuth & Session Endpoints ---
+app.get("/api/auth/google/url", (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.json({ hasClientId: false, error: "Google Client ID not configured." });
+  }
+
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+  const state = crypto.randomBytes(32).toString('hex');
+  (req.session as any).oauthState = state;
+  (req.session as any).oauthIntent = req.query.intent || 'signup';
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile&state=${state}&prompt=select_account`;
+
+  return res.json({ hasClientId: true, url: authUrl });
+});
+
+app.get("/api/auth/google/callback", async (req, res) => {
+  const { code, state, error: oauthError } = req.query;
+
+  const htmlResponse = (success: boolean, userObj: any, errorMsg?: string) => {
+    return `<!DOCTYPE html>
+<html>
+<head><title>UniWork Authentication</title></head>
+<body>
+<script>
+  try {
+    const payload = ${JSON.stringify({ type: success ? 'OAUTH_AUTH_SUCCESS' : 'OAUTH_AUTH_ERROR', user: userObj, error: errorMsg })};
+    if (window.opener) {
+      window.opener.postMessage(payload, window.location.origin);
+      window.close();
+    } else {
+      window.location.href = ${JSON.stringify(success ? '/calendar' : '/signin?error=' + encodeURIComponent(errorMsg || 'Auth failed'))};
+    }
+  } catch (e) {
+    console.error(e);
+  }
+</script>
+<div style="font-family:sans-serif; text-align:center; padding-top:50px;">
+  <h2>${success ? 'Authentication Successful!' : 'Authentication Failed'}</h2>
+  <p>${success ? 'Redirecting back to UniWork...' : (errorMsg || 'Please close this window and try again.')}</p>
+</div>
+</body>
+</html>`;
+  };
+
+  if (oauthError) {
+    return res.status(400).send(htmlResponse(false, null, String(oauthError)));
+  }
+
+  if (!code || !state || state !== (req.session as any).oauthState) {
+    return res.status(400).send(htmlResponse(false, null, "Invalid or missing OAuth state parameter."));
+  }
+
+  delete (req.session as any).oauthState;
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return res.status(500).send(htmlResponse(false, null, "Google OAuth credentials not configured on server."));
+  }
+
+  try {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      return res.status(400).send(htmlResponse(false, null, "Failed to exchange authorization code with Google."));
+    }
+
+    const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const googleUser = await userinfoRes.json();
+
+    if (!googleUser.sub) {
+      return res.status(400).send(htmlResponse(false, null, "Failed to verify Google user identity subject."));
+    }
+
+    const internalUserId = `usr_g_${crypto.createHash('sha256').update(googleUser.sub).digest('hex').substring(0, 16)}`;
+
+    const userObj = {
+      id: internalUserId,
+      email: googleUser.email,
+      name: googleUser.name,
+      picture: googleUser.picture,
+      signedInAt: new Date().toISOString(),
+      authProvider: 'google',
+      encryptionEnabled: true,
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => {
+        if (err) return reject(err);
+        (req.session as any).userId = internalUserId;
+        req.session.save((saveErr) => {
+          if (saveErr) return reject(saveErr);
+          resolve();
+        });
+      });
+    });
+
+    return res.send(htmlResponse(true, userObj));
+  } catch (err: any) {
+    console.error("Google OAuth callback error:", err);
+    return res.status(500).send(htmlResponse(false, null, err.message || "Internal server error during Google OAuth."));
+  }
+});
+
+app.post("/api/auth/direct", async (req, res) => {
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+  if (isProd) {
+    return res.status(403).json({ success: false, error: "Direct ID authentication is disabled in production." });
+  }
+
+  const { userId } = req.body;
+  const cleanId = String(userId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (!cleanId) {
+    return res.status(400).json({ success: false, error: "Valid Workspace ID required." });
+  }
+
+  if (pool) {
+    try {
+      await pool.query(
+        `INSERT INTO uniwork_users (id, provider) VALUES ($1, 'direct') ON CONFLICT (id) DO NOTHING`,
+        [cleanId]
+      );
+    } catch (e) {}
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) return reject(err);
+      (req.session as any).userId = cleanId;
+      req.session.save((saveErr) => {
+        if (saveErr) return reject(saveErr);
+        resolve();
+      });
+    });
+  });
+
+  return res.json({
+    success: true,
+    user: {
+      id: cleanId,
+      signedInAt: new Date().toISOString(),
+      authProvider: 'direct',
+      encryptionEnabled: true,
+    }
+  });
+});
+
+app.get("/api/auth/me", (req, res) => {
+  const userId = (req.session as any)?.userId;
+  if (!userId) {
+    return res.status(401).json({ success: false, authenticated: false });
+  }
+  return res.json({
+    success: true,
+    authenticated: true,
+    user: {
+      id: userId,
+      signedInAt: new Date().toISOString(),
+      authProvider: 'session',
+      encryptionEnabled: true,
+    }
+  });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: "Failed to logout." });
+    }
+    res.clearCookie('connect.sid');
+    return res.json({ success: true });
+  });
+});
 
 // Standard health check endpoints for Cloud Run, Kubernetes, and reverse proxy rollout probes
 app.get(["/health", "/api/health", "/healthz", "/livez", "/readyz"], (req, res) => {
