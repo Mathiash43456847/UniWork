@@ -1195,7 +1195,8 @@ function getOAuthRedirectUri(req: express.Request): string {
   }
 
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  const protocol = isLocalhost ? "http" : "https";
+  const protoHeader = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
+  const protocol = protoHeader || (isLocalhost ? "http" : "https");
 
   return `${protocol}://${host}/api/auth/google/callback`;
 }
@@ -1396,7 +1397,9 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', user: ${JSON.stringify(profile)} }, '${appOrigin}');
-              window.close();
+              setTimeout(function() {
+                try { window.close(); } catch (e) {}
+              }, 500);
             } else {
               window.location.href = '/';
             }

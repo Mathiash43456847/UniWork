@@ -126,7 +126,11 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
         return;
       }
       // 2. Retain reference to opened OAuth popup and verify event.source matches it
-      if (!oauthWindowRef.current || event.source !== oauthWindowRef.current) {
+      const isExpectedSource = Boolean(
+        oauthWindowRef.current &&
+        (event.source === oauthWindowRef.current || oauthWindowRef.current.closed)
+      );
+      if (!isExpectedSource) {
         return;
       }
       // 3. Validate message structure before processing
@@ -175,47 +179,56 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
     setActiveButton(intent);
     setIsAuthenticating(true);
 
-    // Micro-delay so press animation is felt smoothly before opening chooser
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Open popup synchronously during the user click gesture to prevent browser popup blockers
+    let authWindow: Window | null = null;
+    try {
+      authWindow = window.open(
+        'about:blank',
+        'google_oauth_popup',
+        'width=550,height=650,top=100,left=100'
+      );
+      oauthWindowRef.current = authWindow;
+    } catch (popupErr) {
+      console.warn('Initial popup launch error:', popupErr);
+    }
 
     try {
       const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
       const res = await fetch(`/api/auth/google/url?intent=${intent}&tz=${encodeURIComponent(userTz)}`);
       const data = await res.json();
-      const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('127.0.0.1');
 
       if (data.hasClientId && data.url) {
-        const authWindow = window.open(
-          data.url,
-          'google_oauth_popup',
-          'width=550,height=650,top=100,left=100'
-        );
-        oauthWindowRef.current = authWindow;
-        if (!authWindow) {
-          if (isProduction) {
-            setError('Popup blocked by browser. Please enable popups for this site to sign in with Google.');
-            setShowGoogleChooser(false);
-          } else {
+        if (authWindow && !authWindow.closed) {
+          authWindow.location.href = data.url;
+        } else {
+          // If the initial synchronous popup was blocked by browser
+          const retryWindow = window.open(
+            data.url,
+            'google_oauth_popup',
+            'width=550,height=650,top=100,left=100'
+          );
+          oauthWindowRef.current = retryWindow;
+          if (!retryWindow) {
+            setError('Popup blocked by browser. Please allow popups for this site, or select a workspace below.');
             setShowGoogleChooser(true);
           }
         }
       } else {
-        if (isProduction) {
-          setError('Google authentication is currently unavailable.');
-          setShowGoogleChooser(false);
-        } else {
-          setShowGoogleChooser(true);
+        if (authWindow && !authWindow.closed) {
+          try { authWindow.close(); } catch {}
         }
+        oauthWindowRef.current = null;
+        setError('Google authentication is currently unavailable. You can connect using a workspace ID below.');
+        setShowGoogleChooser(true);
       }
     } catch (err) {
       console.warn('OAuth URL fetch error:', err);
-      const isProduction = window.location.hostname !== 'localhost' && !window.location.hostname.includes('run.app') && !window.location.hostname.includes('127.0.0.1');
-      if (isProduction) {
-        setError('Failed to connect to Google OAuth service.');
-        setShowGoogleChooser(false);
-      } else {
-        setShowGoogleChooser(true);
+      if (authWindow && !authWindow.closed) {
+        try { authWindow.close(); } catch {}
       }
+      oauthWindowRef.current = null;
+      setError('Failed to connect to Google OAuth service. You can connect using a workspace ID below.');
+      setShowGoogleChooser(true);
     } finally {
       setIsAuthenticating(false);
       setActiveButton(null);
