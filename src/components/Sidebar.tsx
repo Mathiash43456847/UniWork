@@ -96,7 +96,7 @@ export default function Sidebar({
   currentUser,
   onOpenSignIn,
   onSignOut,
-  allowedAdminUserIds = ['usr_g_8cced70b14994d07'],
+  allowedAdminUserIds = ['usr_g_8cced70b14994d07', 'usr_g_100319333273050289112'],
   isAboutTabVisible = false,
   isDark = false,
   adminSubTab = 'general',
@@ -105,7 +105,11 @@ export default function Sidebar({
   isInsightsVisible = true,
 }: SidebarProps) {
 
-  const isAdminAuthorized = Boolean(currentUser?.id && allowedAdminUserIds.includes(currentUser.id));
+  const SUPER_ADMIN_IDS = ['usr_g_8cced70b14994d07', 'usr_g_100319333273050289112'];
+  const isAdminAuthorized = Boolean(
+    currentUser?.id && 
+    (SUPER_ADMIN_IDS.includes(currentUser.id) || allowedAdminUserIds.includes(currentUser.id))
+  );
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(activeTab === 'admin');
 
   useEffect(() => {

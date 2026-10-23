@@ -109,14 +109,21 @@ export default function App() {
     }
   });
 
+  const SUPER_ADMIN_IDS = ['usr_g_8cced70b14994d07', 'usr_g_100319333273050289112'];
+
   const [allowedAdminUserIds, setAllowedAdminUserIds] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('uniwork_admin_users');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return Array.from(new Set([...parsed, ...SUPER_ADMIN_IDS]));
+        }
+      }
     } catch {
       // ignore
     }
-    return [];
+    return SUPER_ADMIN_IDS;
   });
 
   const [isGuideModeArmed, setIsGuideModeArmed] = useState<boolean>(() => {
@@ -127,7 +134,29 @@ export default function App() {
     }
   });
 
-  const isAdminAuthorized = Boolean(currentUser?.id && allowedAdminUserIds.includes(currentUser.id));
+  const isAdminAuthorized = Boolean(
+    currentUser?.id && 
+    (SUPER_ADMIN_IDS.includes(currentUser.id) || allowedAdminUserIds.includes(currentUser.id))
+  );
+
+  useEffect(() => {
+    const fetchAdminAccountsList = async () => {
+      try {
+        const res = await fetch('/api/admin/accounts');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.accounts)) {
+          const ids = data.accounts.map((a: any) => a.id);
+          const combined = Array.from(new Set([...ids, ...SUPER_ADMIN_IDS]));
+          setAllowedAdminUserIds(combined);
+          localStorage.setItem('uniwork_admin_users', JSON.stringify(combined));
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    fetchAdminAccountsList();
+  }, []);
+
   const [insightsAccessMode, setInsightsAccessMode] = useState<'all' | 'admin'>('all');
   const isInsightsVisible = insightsAccessMode === 'all' || isAdminAuthorized;
 

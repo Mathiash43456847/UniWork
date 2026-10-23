@@ -469,7 +469,9 @@ if (dbUrl) {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
           INSERT INTO uniwork_admin_accounts (id, name)
-          VALUES ('usr_g_8cced70b14994d07', 'Super Admin')
+          VALUES 
+            ('usr_g_8cced70b14994d07', 'Super Admin'),
+            ('usr_g_100319333273050289112', 'Super Admin')
           ON CONFLICT (id) DO NOTHING;
         `);
 
@@ -3472,10 +3474,15 @@ app.post("/api/aura-config", async (req, res) => {
 });
 
 // --- UniWork Admin Accounts & Encrypted Chat Endpoints ---
-const SUPER_ADMIN_ID = "usr_g_8cced70b14994d07";
+const SUPER_ADMIN_IDS = ["usr_g_8cced70b14994d07", "usr_g_100319333273050289112"];
+function isSuperAdmin(id?: string | null): boolean {
+  if (!id) return false;
+  return SUPER_ADMIN_IDS.includes(id);
+}
 
 let inMemoryAdminAccounts = new Map<string, { id: string; name: string; updatedAt: string }>([
-  [SUPER_ADMIN_ID, { id: SUPER_ADMIN_ID, name: "Super Admin", updatedAt: new Date().toISOString() }],
+  ["usr_g_8cced70b14994d07", { id: "usr_g_8cced70b14994d07", name: "Super Admin", updatedAt: new Date().toISOString() }],
+  ["usr_g_100319333273050289112", { id: "usr_g_100319333273050289112", name: "Super Admin", updatedAt: new Date().toISOString() }],
 ]);
 
 interface EncryptedAdminMessage {
@@ -3506,13 +3513,15 @@ app.get("/api/admin/accounts", async (req, res) => {
     console.warn("DB get admin accounts error, using memory fallback:", err);
   }
 
-  // Ensure super admin always exists
-  if (!inMemoryAdminAccounts.has(SUPER_ADMIN_ID)) {
-    inMemoryAdminAccounts.set(SUPER_ADMIN_ID, {
-      id: SUPER_ADMIN_ID,
-      name: "Super Admin",
-      updatedAt: new Date().toISOString(),
-    });
+  // Ensure super admins always exist
+  for (const sId of SUPER_ADMIN_IDS) {
+    if (!inMemoryAdminAccounts.has(sId)) {
+      inMemoryAdminAccounts.set(sId, {
+        id: sId,
+        name: "Super Admin",
+        updatedAt: new Date().toISOString(),
+      });
+    }
   }
 
   const list = Array.from(inMemoryAdminAccounts.values());
@@ -3523,7 +3532,7 @@ app.get("/api/admin/accounts", async (req, res) => {
 app.post("/api/admin/accounts", async (req, res) => {
   const { id, name, callerUserId } = req.body;
 
-  if (!callerUserId || callerUserId !== SUPER_ADMIN_ID) {
+  if (!isSuperAdmin(callerUserId)) {
     return res.status(403).json({
       success: false,
       error: "Authorization failed: Only the Super Admin can assign or change admin names.",
@@ -3563,14 +3572,14 @@ app.delete("/api/admin/accounts/:id", async (req, res) => {
   const { id } = req.params;
   const callerUserId = (req.headers["x-caller-user-id"] as string) || (req.query.callerUserId as string);
 
-  if (!callerUserId || callerUserId !== SUPER_ADMIN_ID) {
+  if (!isSuperAdmin(callerUserId)) {
     return res.status(403).json({
       success: false,
       error: "Authorization failed: Only the Super Admin can remove admin accounts.",
     });
   }
 
-  if (id === SUPER_ADMIN_ID) {
+  if (isSuperAdmin(id)) {
     return res.status(400).json({ success: false, error: "The primary Super Admin cannot be deleted." });
   }
 

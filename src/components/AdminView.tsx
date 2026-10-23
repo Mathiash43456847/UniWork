@@ -123,7 +123,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   // Super Admin Check
-  const isSuperAdmin = currentUser?.id === 'usr_g_8cced70b14994d07';
+  const isSuperAdmin = currentUser?.id === 'usr_g_8cced70b14994d07' || currentUser?.id === 'usr_g_100319333273050289112';
 
   // Admin Account Names State
   const [adminNamesMap, setAdminNamesMap] = useState<Record<string, string>>({});
