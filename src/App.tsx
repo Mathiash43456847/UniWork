@@ -332,7 +332,17 @@ export default function App() {
   });
 
   const [activeTab, setActiveTabState] = useState<ActiveTab>(() => {
-    // 1. Check current URL path
+    // 1. Check URL search params (e.g. ?tab=calendar)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as ActiveTab;
+      if (tabParam && ['calendar', 'focus', 'tasks', 'goals', 'insights', 'settings', 'about', 'privacy', 'terms', 'admin'].includes(tabParam)) {
+        window.history.replaceState({}, '', `/${tabParam}`);
+        return tabParam;
+      }
+    } catch {}
+
+    // 2. Check current URL path
     const urlTab = getTabFromPath(window.location.pathname);
     const hasUser = !!localStorage.getItem('uniwork_user_session');
 
@@ -443,11 +453,13 @@ export default function App() {
 
   const [isSignInModalOpen, setIsSignInModalOpen] = useState<boolean>(false);
 
-  const handleSignInSuccess = (user: User) => {
+  const handleSignInSuccess = (user: User, destination: ActiveTab = 'calendar') => {
+    console.log('App: Sign-in success, updating user state and navigating to:', destination);
     setCurrentUser(user);
     localStorage.setItem('uniwork_user_session', JSON.stringify(user));
     setIsSignInModalOpen(false);
-    setActiveTab('calendar');
+    setActiveTab(destination);
+    console.log('App: State updated, modal closed, tab set to:', destination);
   };
 
   const handleSignOut = () => {

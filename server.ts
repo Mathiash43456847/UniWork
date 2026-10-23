@@ -46,7 +46,7 @@ const app = express();
 app.set("trust proxy", true);
 // AI Studio Cloud Run uses an internal NGINX reverse-proxy on port 8080 that forwards to port 3000.
 // Express must always bind to 3000 so it does not collide with NGINX on 8080.
-const PORT = process.env.PORT && process.env.PORT !== "8080" ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
@@ -588,6 +588,315 @@ app.get("/api/db-status", async (req, res) => {
       error: err.message || "Database connection test failed." 
     });
   }
+});
+
+// Helper to resolve accurate public OAuth callback URL across all hosting environments (AI Studio, Render, Local)
+function resolveAuthCallbackUrl(req: express.Request): string {
+  // 1. Explicit origin query parameter sent from the frontend browser (100% matches what user is viewing)
+  const clientOrigin = typeof req.query.origin === 'string' ? req.query.origin.trim() : '';
+  if (clientOrigin && (clientOrigin.startsWith('http://') || clientOrigin.startsWith('https://'))) {
+    return `${clientOrigin.replace(/\/+$/, '')}/api/auth/google/callback`;
+  }
+
+  // 2. Production or Preview APP_URL from process.env (AI Studio Cloud Run or Render)
+  const envAppUrl = (process.env.APP_URL || '').trim();
+  if (envAppUrl && (envAppUrl.startsWith('http://') || envAppUrl.startsWith('https://'))) {
+    return `${envAppUrl.replace(/\/+$/, '')}/api/auth/google/callback`;
+  }
+
+  // 3. Reverse Proxy Forwarded Host header
+  const forwardedHost = req.headers['x-forwarded-host'] as string;
+  if (forwardedHost) {
+    const rawHost = forwardedHost.split(',')[0].trim();
+    const forwardedProto = (req.headers['x-forwarded-proto'] as string) || (rawHost.includes('localhost') ? 'http' : 'https');
+    return `${forwardedProto}://${rawHost}/api/auth/google/callback`;
+  }
+
+  // 4. Request headers Origin / Referer
+  const reqOrigin = req.headers.origin as string;
+  if (reqOrigin && (reqOrigin.startsWith('http://') || reqOrigin.startsWith('https://'))) {
+    return `${reqOrigin.replace(/\/+$/, '')}/api/auth/google/callback`;
+  }
+
+  if (req.headers.referer) {
+    try {
+      const parsedReferer = new URL(req.headers.referer as string);
+      return `${parsedReferer.origin}/api/auth/google/callback`;
+    } catch {}
+  }
+
+  // 5. Host fallback with SSL auto-detection
+  const host = req.get('host') || 'localhost:3000';
+  const proto = (req.headers['x-forwarded-proto'] as string) || (host.includes('localhost') ? 'http' : 'https');
+  return `${proto}://${host}/api/auth/google/callback`;
+}
+
+// --- Google OAuth Authentication Endpoints (Rebuilt from scratch) ---
+app.get("/api/auth/google/url", (req, res) => {
+  const intent = (req.query.intent as string) || 'signin';
+  const destination = (req.query.destination as string) || 'calendar';
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+
+  if (!clientId) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "GOOGLE_CLIENT_ID environment secret is not configured." 
+    });
+  }
+
+  const redirectUri = resolveAuthCallbackUrl(req);
+
+  const statePayload = {
+    intent,
+    destination,
+    redirectUri,
+    nonce: crypto.randomBytes(12).toString('hex')
+  };
+  const stateStr = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'select_account',
+    state: stateStr
+  });
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  return res.json({ 
+    success: true, 
+    url: authUrl,
+    redirectUri 
+  });
+});
+
+app.get("/api/auth/google/callback", async (req, res) => {
+  const code = req.query.code as string;
+  const state = req.query.state as string;
+  const error = req.query.error as string;
+
+  let destination = 'calendar';
+  let intent = 'signin';
+  let redirectUri = resolveAuthCallbackUrl(req);
+
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+      if (decoded.destination) destination = decoded.destination;
+      if (decoded.intent) intent = decoded.intent;
+      if (decoded.redirectUri) redirectUri = decoded.redirectUri;
+    } catch (parseErr) {
+      console.warn("Failed to parse state token in OAuth callback:", parseErr);
+    }
+  }
+
+  if (error || !code) {
+    const errorMsg = error || 'Authentication was cancelled or access was denied.';
+    return res.redirect(`/?error=${encodeURIComponent(errorMsg)}`);
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return res.redirect(`/?error=${encodeURIComponent('Google OAuth credentials not configured on server.')}`);
+  }
+
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      })
+    });
+
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      throw new Error(tokenData.error_description || tokenData.error || 'Failed to exchange authorization code.');
+    }
+
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+    });
+    const googleUser = await userRes.json();
+
+    if (!googleUser || !googleUser.id) {
+      throw new Error('Failed to retrieve user profile from Google.');
+    }
+
+    const userId = `usr_g_${googleUser.id}`;
+    const email = googleUser.email || '';
+    const displayName = googleUser.name || (email ? email.split('@')[0] : 'Student');
+    const avatarUrl = googleUser.picture || '';
+
+    if (pool) {
+      try {
+        const client = await pool.connect();
+        try {
+          await client.query(
+            `INSERT INTO uniwork_users (id, provider, created_at)
+             VALUES ($1, 'google', CURRENT_TIMESTAMP)
+             ON CONFLICT (id) DO NOTHING`,
+            [userId]
+          );
+          await client.query(
+            `INSERT INTO uniwork_user_profiles (user_id, display_name, avatar_url, updated_at)
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+             ON CONFLICT (user_id) DO UPDATE SET
+               display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), uniwork_user_profiles.display_name),
+               avatar_url = COALESCE(EXCLUDED.avatar_url, uniwork_user_profiles.avatar_url),
+               updated_at = CURRENT_TIMESTAMP`,
+            [userId, displayName, avatarUrl]
+          );
+        } finally {
+          client.release();
+        }
+      } catch (dbErr) {
+        console.warn("Database user upsert warning:", dbErr);
+      }
+    }
+
+    const userSession = {
+      id: userId,
+      email,
+      displayName,
+      avatarUrl,
+      authProvider: 'google',
+      signedInAt: new Date().toISOString()
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UniWork - Initializing Workspace</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background-color: #020617;
+        color: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+      .card {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(51, 65, 85, 0.6);
+        border-radius: 24px;
+        padding: 36px 48px;
+        text-align: center;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      .spinner {
+        width: 44px;
+        height: 44px;
+        border: 3px solid rgba(6, 182, 212, 0.2);
+        border-top-color: #06b6d4;
+        border-radius: 50%;
+        animation: spin 0.75s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .title {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: #e2e8f0;
+      }
+      .subtitle {
+        font-size: 12px;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="spinner"></div>
+      <div>
+        <div class="title">Connecting to UniWork Workspace</div>
+        <div class="subtitle">Setting up your profile and dashboard...</div>
+      </div>
+    </div>
+    <script>
+      try {
+        const session = ${JSON.stringify(userSession)};
+        localStorage.setItem('uniwork_user_session', JSON.stringify(session));
+        localStorage.setItem('uniwork_current_user_id', session.id);
+      } catch (err) {
+        console.error('Session persistence failed:', err);
+      }
+      window.location.replace('/?tab=${destination}');
+    </script>
+  </body>
+</html>`;
+
+    return res.send(html);
+  } catch (err: any) {
+    console.error("Google OAuth callback error:", err);
+    return res.redirect(`/?error=${encodeURIComponent(err.message || 'Google sign in failed.')}`);
+  }
+});
+
+// --- Direct Student ID / Workspace Authentication Endpoint ---
+app.post("/api/auth/direct", async (req, res) => {
+  const { userId, intent = "signin", timeZone } = req.body;
+  const cleanId = String(userId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || `usr_${Date.now()}`;
+
+  let displayName = "Student";
+  if (cleanId === "usr-mathias-cheow-primary") displayName = "Mathias Cheow";
+  else if (cleanId === "usr_study_workspace_2") displayName = "Study Projects";
+
+  if (pool) {
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query(
+          `INSERT INTO uniwork_users (id, provider, created_at)
+           VALUES ($1, 'workspace', CURRENT_TIMESTAMP)
+           ON CONFLICT (id) DO NOTHING`,
+          [cleanId]
+        );
+        await client.query(
+          `INSERT INTO uniwork_user_profiles (user_id, display_name, updated_at)
+           VALUES ($1, $2, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO UPDATE SET
+             display_name = COALESCE(NULLIF(EXCLUDED.display_name, ''), uniwork_user_profiles.display_name),
+             updated_at = CURRENT_TIMESTAMP`,
+          [cleanId, displayName]
+        );
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.warn("DB direct auth error:", err);
+    }
+  }
+
+  const user = {
+    id: cleanId,
+    displayName,
+    authProvider: "workspace",
+    signedInAt: new Date().toISOString()
+  };
+
+  return res.json({ success: true, user });
 });
 
 // DELETE /api/account - Secure server-side account and data deletion
@@ -1176,123 +1485,80 @@ app.post("/api/settings", async (req, res) => {
   }
 });
 
-// --- GOOGLE OAUTH ROUTES ---
-function getOAuthRedirectUri(req: express.Request): string {
-  const forwardedHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim();
-  const hostHeader = req.get("host");
-  const referer = req.headers["referer"] || (req.headers["origin"] as string);
-
-  let host = forwardedHost || hostHeader || "localhost:3000";
-
-  // If internal proxy host is localhost or 127.0.0.1, check if referer header contains the real Cloud Run domain
-  if ((host.includes("localhost") || host.includes("127.0.0.1")) && referer) {
-    try {
-      const refUrl = new URL(referer);
-      if (refUrl.host && !refUrl.host.includes("localhost") && !refUrl.host.includes("127.0.0.1")) {
-        host = refUrl.host;
-      }
-    } catch {}
-  }
-
-  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  const protoHeader = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
-  const protocol = protoHeader || (isLocalhost ? "http" : "https");
-
-  return `${protocol}://${host}/api/auth/google/callback`;
-}
-
-function getOAuthAppOrigin(req: express.Request): string {
-  const redirectUri = getOAuthRedirectUri(req);
-  return redirectUri.replace(/\/api\/auth\/google\/callback\/?$/, '');
-}
-
+// --- GOOGLE OAUTH ROUTES (Direct Redirect Flow) ---
 app.get("/api/auth/google/url", (req, res) => {
   const intent = (req.query.intent as string) === 'signin' ? 'signin' : 'signup';
+  const destination = (req.query.destination as string) || 'calendar';
   const timeZone = resolveRequestTimeZone(req, req.query.tz as string);
-  const redirectUri = getOAuthRedirectUri(req);
+  
+  const forwardedHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim();
+  const host = forwardedHost || req.get("host") || "localhost:3000";
+  const protoHeader = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
+  const protocol = protoHeader || (host.includes("localhost") ? "http" : "https");
+  const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
 
   const clientId = process.env.GOOGLE_CLIENT_ID || "611762741469-7cosvnnpo910o0mp58oettgj9gpeb3h3.apps.googleusercontent.com";
-  const hasClientId = Boolean(clientId && clientId.trim() !== "");
   
-  if (!hasClientId) {
-    return res.json({ url: null, hasClientId: false, redirectUri });
+  if (!clientId) {
+    return res.status(400).json({ success: false, error: "GOOGLE_CLIENT_ID is not configured in secrets." });
   }
 
   const stateToken = `st_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const encodedTz = Buffer.from(timeZone).toString('base64url');
+  const state = `${intent}:${encodedTz}:${destination}:${stateToken}`;
+
   const params = new URLSearchParams({
-    client_id: clientId!,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "openid",
+    scope: "openid email profile",
     prompt: "select_account",
-    state: `${intent}:${encodedTz}:${stateToken}`,
+    state: state,
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-  res.json({ url: authUrl, hasClientId: true, redirectUri, timeZone });
+  res.json({ success: true, url: authUrl, redirectUri });
 });
 
 app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req, res) => {
   const { code, state, error: authError } = req.query;
-  const appOrigin = getOAuthAppOrigin(req);
-  
+
   let intent = 'signup';
   let userTimeZone = 'UTC';
+  let destination = 'calendar';
   if (typeof state === 'string') {
     const parts = state.split(':');
-    if (parts[0] === 'signin') {
-      intent = 'signin';
-    }
-    if (parts.length >= 3) {
+    if (parts.length >= 1 && parts[0] === 'signin') intent = 'signin';
+    if (parts.length >= 2) {
       try {
         const decodedTz = Buffer.from(parts[1], 'base64url').toString('utf8');
-        if (isValidTimeZone(decodedTz)) {
-          userTimeZone = decodedTz;
-        }
+        if (isValidTimeZone(decodedTz)) userTimeZone = decodedTz;
       } catch {}
     }
+    if (parts.length >= 3) destination = parts[2];
   }
 
   if (authError || !code) {
-    return res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Authentication Cancelled</title></head>
-        <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center;">
-          <div style="max-width: 420px; margin: 0 auto; background: #1e293b; padding: 28px; border-radius: 16px; border: 1px solid #ef4444;">
-            <h2 style="color: #ef4444; margin-bottom: 12px;">Authentication Cancelled</h2>
-            <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-              ${authError || 'Google authentication was not completed.'}
-            </p>
-            <button onclick="window.close()" style="background: #38bdf8; color: #0f172a; border: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-              Close Window
-            </button>
-          </div>
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${authError || "Authentication cancelled."}' }, '${appOrigin}');
-              setTimeout(() => window.close(), 2000);
-            }
-          </script>
-        </body>
-      </html>
-    `);
+    return res.redirect(`/?auth_error=${encodeURIComponent(String(authError || 'Authentication cancelled'))}`);
   }
 
-  const activeClientId = process.env.GOOGLE_CLIENT_ID || "611762741469-7cosvnnpo910o0mp58oettgj9gpeb3h3.apps.googleusercontent.com";
-  const activeClientSecret = process.env.GOOGLE_CLIENT_SECRET || "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";
+  const clientId = process.env.GOOGLE_CLIENT_ID || "611762741469-7cosvnnpo910o0mp58oettgj9gpeb3h3.apps.googleusercontent.com";
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "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";
+
+  const forwardedHost = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim();
+  const host = forwardedHost || req.get("host") || "localhost:3000";
+  const protoHeader = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim();
+  const protocol = protoHeader || (host.includes("localhost") ? "http" : "https");
+  const redirectUri = `${protocol}://${host}/api/auth/google/callback`;
 
   try {
-    const redirectUri = getOAuthRedirectUri(req);
-
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code: String(code),
-        client_id: activeClientId,
-        client_secret: activeClientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: redirectUri,
         grant_type: "authorization_code",
       }),
@@ -1309,7 +1575,6 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
     const googleUser = await userInfoRes.json();
     
     const subjectId = googleUser.sub || googleUser.id || 'anonymous';
-    // Derive privacy-preserving anonymous student User ID (Zero PII - no email, name, or avatar stored)
     const finalUserId = `usr_g_${crypto.createHash('sha256').update(String(subjectId)).digest('hex').substring(0, 16)}`;
 
     if (!pool) {
@@ -1319,57 +1584,20 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-
-      // Check if user already exists in uniwork_users
-      const userCheck = await client.query(
-        "SELECT id FROM uniwork_users WHERE id = $1",
-        [finalUserId]
-      );
+      const userCheck = await client.query("SELECT id FROM uniwork_users WHERE id = $1", [finalUserId]);
 
       if (intent === 'signin') {
         if (userCheck.rows.length === 0) {
           await client.query("ROLLBACK");
-          return res.send(`
-            <!DOCTYPE html>
-            <html>
-              <head><title>Account Not Found</title></head>
-              <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center;">
-                <div style="max-width: 420px; margin: 0 auto; background: #1e293b; padding: 28px; border-radius: 16px; border: 1px solid #ef4444;">
-                  <h2 style="color: #ef4444; margin-bottom: 12px;">No Workspace Found</h2>
-                  <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-                    No UniWork workspace found for this account. Please use the <b>Sign up with Google</b> button to register your private workspace.
-                  </p>
-                  <button onclick="window.close()" style="background: #38bdf8; color: #0f172a; border: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                    Back to Sign In
-                  </button>
-                </div>
-                <script>
-                  if (window.opener) {
-                    window.opener.postMessage({
-                      type: 'OAUTH_AUTH_ERROR',
-                      error: 'No UniWork workspace exists for this account. Please use "Sign up with Google" instead.'
-                    }, '${appOrigin}');
-                    setTimeout(() => window.close(), 3000);
-                  }
-                </script>
-              </body>
-            </html>
-          `);
+          return res.redirect(`/?auth_error=${encodeURIComponent('No UniWork workspace found for this account. Please sign up first.')}`);
         }
         await client.query("COMMIT");
       } else {
-        // Sign-Up intent: create if new
-        if (userCheck.rows.length > 0) {
-          await client.query("COMMIT");
-        } else {
-          await client.query(
-            "INSERT INTO uniwork_users (id, provider) VALUES ($1, 'google') ON CONFLICT (id) DO NOTHING",
-            [finalUserId]
-          );
+        if (userCheck.rows.length === 0) {
+          await client.query("INSERT INTO uniwork_users (id, provider) VALUES ($1, 'google') ON CONFLICT (id) DO NOTHING", [finalUserId]);
           await seedDefaultUserData(client, finalUserId, userTimeZone);
-          await client.query("COMMIT");
-          console.log(`[AUTH] Successfully registered anonymous student user (${finalUserId}) into PostgreSQL.`);
         }
+        await client.query("COMMIT");
       }
     } catch (txErr) {
       await client.query("ROLLBACK");
@@ -1378,7 +1606,6 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
       client.release();
     }
 
-    // Zero PII Profile
     const profile = {
       id: finalUserId,
       isGuest: false,
@@ -1390,51 +1617,26 @@ app.get(["/api/auth/google/callback", "/api/auth/google/callback/"], async (req,
     res.send(`
       <!DOCTYPE html>
       <html>
-        <head><title>Authenticating...</title></head>
-        <body style="font-family: sans-serif; text-align: center; padding: 40px; background: #090d16; color: white;">
-          <h3 style="color: #38bdf8;">Authentication Successful</h3>
-          <p style="color: #94a3b8;">Connecting to Private UniWork Vault...</p>
+        <head><title>Logging in...</title></head>
+        <body style="font-family: sans-serif; background: #0f172a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
+          <div style="text-align: center;">
+            <h3 style="color: #38bdf8; margin-bottom: 8px;">Authentication Successful</h3>
+            <p style="color: #94a3b8; font-size: 14px;">Setting up your secure workspace...</p>
+          </div>
           <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', user: ${JSON.stringify(profile)} }, '${appOrigin}');
-              setTimeout(function() {
-                try { window.close(); } catch (e) {}
-              }, 500);
-            } else {
-              window.location.href = '/';
+            try {
+              localStorage.setItem('uniwork_user_session', JSON.stringify(${JSON.stringify(profile)}));
+            } catch (e) {
+              console.error('Failed to save session:', e);
             }
+            window.location.href = '/?tab=${destination}';
           </script>
         </body>
       </html>
     `);
   } catch (err: any) {
-    console.error("OAuth Exchange / DB Transaction Error:", err);
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Database Error</title></head>
-        <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center;">
-          <div style="max-width: 450px; margin: 0 auto; background: #1e293b; padding: 28px; border-radius: 16px; border: 1px solid #ef4444;">
-            <h2 style="color: #ef4444; margin-bottom: 12px;">Sign-Up Database Error</h2>
-            <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-              ${err.message || "Failed to commit user account to PostgreSQL database."}
-            </p>
-            <button onclick="window.close()" style="background: #ef4444; color: white; border: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-              Close
-            </button>
-          </div>
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({
-                type: 'OAUTH_AUTH_ERROR',
-                error: '${(err.message || "Failed to commit user to database.").replace(/'/g, "\\'")}'
-              }, '${appOrigin}');
-              setTimeout(() => window.close(), 3500);
-            }
-          </script>
-        </body>
-      </html>
-    `);
+    console.error("OAuth Exchange Error:", err);
+    res.redirect(`/?auth_error=${encodeURIComponent(err.message || 'Authentication failed')}`);
   }
 });
 

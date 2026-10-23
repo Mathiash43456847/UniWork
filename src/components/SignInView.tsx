@@ -19,13 +19,13 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User } from '../types';
+import { User, ActiveTab } from '../types';
 import { UNIWORK_DARK_LOGO_BASE64, UNIWORK_FULL_LOGO_BASE64 } from '../assets/logoData';
 import uniworkFullLogoUrl from '../assets/iwork-full-logo.png';
 import { UniWorkAuraGlow } from './UniWorkAuraGlow';
 
 interface SignInViewProps {
-  onSignInSuccess: (user: User) => void;
+  onSignInSuccess: (user: User, destination?: ActiveTab) => void;
   onExploreAbout: () => void;
   onNavigateLegal?: (type: 'terms' | 'privacy') => void;
   onBack?: () => void;
@@ -123,6 +123,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
     const handleOAuthMessage = (event: MessageEvent) => {
       // 1. Validate exact trusted origin appropriate to each environment (same origin as app)
       if (event.origin !== window.location.origin) {
+        console.error('OAuth: Origin mismatch. Expected:', window.location.origin, 'Got:', event.origin);
         return;
       }
       // 2. Retain reference to opened OAuth popup and verify event.source matches it
@@ -151,7 +152,8 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
           try { oauthWindowRef.current.close(); } catch {}
           oauthWindowRef.current = null;
         }
-        onSignInSuccess(user);
+        console.log('OAuth: Success message processed, triggering onSignInSuccess');
+        onSignInSuccess(user, event.data.destination || 'calendar');
       } else if (type === 'OAUTH_AUTH_ERROR' || type === 'GOOGLE_AUTH_ERROR') {
         setIsAuthenticating(false);
         setActiveButton(null);
@@ -166,8 +168,21 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
     return () => window.removeEventListener('message', handleOAuthMessage);
   }, [onSignInSuccess]);
 
-  // Trigger Real Google OAuth Popup or direct database account chooser
-  const handleStartRealGoogleOAuth = async (intent: 'signup' | 'signin' = 'signup') => {
+  // Check URL for OAuth redirect errors on mount
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlError = searchParams.get('error');
+      if (urlError) {
+        setError(decodeURIComponent(urlError));
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    } catch {}
+  }, []);
+
+  // Trigger Direct Redirection Google OAuth
+  const handleStartRealGoogleOAuth = async (intent: 'signup' | 'signin' = 'signup', destination: ActiveTab = 'calendar') => {
     if (intent === 'signup' && !agreedToTerms) {
       setShakeTerms(true);
       setTimeout(() => setShakeTerms(false), 600);
@@ -179,59 +194,23 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
     setActiveButton(intent);
     setIsAuthenticating(true);
 
-    // Open popup synchronously during the user click gesture to prevent browser popup blockers
-    let authWindow: Window | null = null;
     try {
-      authWindow = window.open(
-        'about:blank',
-        'google_oauth_popup',
-        'width=550,height=650,top=100,left=100'
-      );
-      oauthWindowRef.current = authWindow;
-    } catch (popupErr) {
-      console.warn('Initial popup launch error:', popupErr);
-    }
-
-    try {
-      const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const res = await fetch(`/api/auth/google/url?intent=${intent}&tz=${encodeURIComponent(userTz)}`);
+      const origin = encodeURIComponent(window.location.origin);
+      const res = await fetch(`/api/auth/google/url?intent=${intent}&destination=${destination}&origin=${origin}`);
       const data = await res.json();
-
-      if (data.hasClientId && data.url) {
-        if (authWindow && !authWindow.closed) {
-          authWindow.location.href = data.url;
-        } else {
-          // If the initial synchronous popup was blocked by browser
-          const retryWindow = window.open(
-            data.url,
-            'google_oauth_popup',
-            'width=550,height=650,top=100,left=100'
-          );
-          oauthWindowRef.current = retryWindow;
-          if (!retryWindow) {
-            setError('Popup blocked by browser. Please allow popups for this site, or select a workspace below.');
-            setShowGoogleChooser(true);
-          }
-        }
+      if (data.success && data.url) {
+        window.location.href = data.url;
       } else {
-        if (authWindow && !authWindow.closed) {
-          try { authWindow.close(); } catch {}
-        }
-        oauthWindowRef.current = null;
-        setError('Google authentication is currently unavailable. You can connect using a workspace ID below.');
+        setIsAuthenticating(false);
+        setActiveButton(null);
+        setError(data.error || 'Failed to initialize Google login.');
         setShowGoogleChooser(true);
       }
-    } catch (err) {
-      console.warn('OAuth URL fetch error:', err);
-      if (authWindow && !authWindow.closed) {
-        try { authWindow.close(); } catch {}
-      }
-      oauthWindowRef.current = null;
-      setError('Failed to connect to Google OAuth service. You can connect using a workspace ID below.');
-      setShowGoogleChooser(true);
-    } finally {
+    } catch (err: any) {
       setIsAuthenticating(false);
       setActiveButton(null);
+      setError('Failed to connect to Google OAuth service. You can connect using a workspace ID below.');
+      setShowGoogleChooser(true);
     }
   };
 
@@ -254,7 +233,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
       if (data.success && data.user) {
         setIsAuthenticating(false);
         setShowGoogleChooser(false);
-        onSignInSuccess(data.user);
+        onSignInSuccess(data.user, 'calendar');
       } else {
         setIsAuthenticating(false);
         setError(data.error || 'Sign in failed.');
@@ -289,7 +268,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
       if (data.success && data.user) {
         setIsAuthenticating(false);
         setShowGoogleChooser(false);
-        onSignInSuccess(data.user);
+        onSignInSuccess(data.user, 'calendar');
       } else {
         setIsAuthenticating(false);
         setError(data.error || 'Authentication rejected by database.');
@@ -309,7 +288,7 @@ export default function SignInView({ onSignInSuccess, onExploreAbout, onNavigate
       signedInAt: new Date().toISOString(),
       authProvider: 'guest',
     };
-    onSignInSuccess(guestUser);
+    onSignInSuccess(guestUser, 'calendar');
   };
 
   return (
