@@ -437,25 +437,18 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
  * Global room '000000' also includes active bots that study generally.
  */
 export function getActiveBotsForRoom(roomCode: string, timestampMs: number = Date.now()): SimulatedPeerState[] {
-  const activeBots: SimulatedPeerState[] = [];
   const normalizedRoomCode = String(roomCode || '000000').trim();
+  if (normalizedRoomCode !== '000000') {
+    return []; // No bots in custom/private focus rooms
+  }
+  const activeBots: SimulatedPeerState[] = [];
 
   for (const bot of STUDY_BOTS) {
     const state = getSimulatedBotState(bot, timestampMs);
     if (!state) continue; // offline
 
-    // Global room gets all bots that have '000000' in preferredRooms, or if the bot matches this room
-    if (normalizedRoomCode === '000000') {
-      if (bot.preferredRooms.includes('000000')) {
-        activeBots.push({ ...state, roomCode: '000000' });
-      }
-    } else {
-      if (bot.preferredRooms.includes(normalizedRoomCode)) {
-        activeBots.push({ ...state, roomCode: normalizedRoomCode });
-      } else if (bot.preferredRooms.includes('000000') && activeBots.length < 2) {
-        // In other rooms, bring in 1-2 bots if the room is empty so students never study alone
-        activeBots.push({ ...state, roomCode: normalizedRoomCode });
-      }
+    if (bot.preferredRooms.includes('000000')) {
+      activeBots.push({ ...state, roomCode: '000000' });
     }
   }
 

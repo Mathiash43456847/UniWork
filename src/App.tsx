@@ -361,9 +361,12 @@ export default function App() {
   });
 
   const [activeTab, setActiveTabState] = useState<ActiveTab>(() => {
-    // 1. Check URL search params (e.g. ?tab=calendar)
+    // 1. Check URL search params for room or tab
     try {
       const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room') || params.get('roomCode');
+      if (roomParam) return 'focus';
+
       const tabParam = params.get('tab') as ActiveTab;
       if (tabParam && ['calendar', 'focus', 'tasks', 'goals', 'insights', 'settings', 'about', 'privacy', 'terms', 'admin'].includes(tabParam)) {
         window.history.replaceState({}, '', `/${tabParam}`);
@@ -389,6 +392,10 @@ export default function App() {
 
   const [initialFocusRoomCode, setInitialFocusRoomCode] = useState<string | null>(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room') || params.get('roomCode');
+      if (roomParam) return roomParam.trim();
+
       const match = window.location.pathname.match(/^\/focus\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) return match[1];
       return null;

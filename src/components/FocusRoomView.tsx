@@ -590,13 +590,16 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     if (isPreview) return;
     const parseUrlRoute = async () => {
       const pathname = window.location.pathname;
+      const params = new URLSearchParams(window.location.search);
+      const queryRoom = params.get('room') || params.get('roomCode');
+
       const matchPeer = pathname.match(/^\/focus\/([0-9a-zA-Z]+)\/(.+)$/i);
       const matchRoom = pathname.match(/^\/focus\/([0-9a-zA-Z]+)$/i);
+      const code = matchPeer ? matchPeer[1] : (matchRoom ? matchRoom[1] : (queryRoom ? queryRoom.trim() : null));
 
       if (matchPeer) {
-        const code = matchPeer[1];
         const studentName = decodeURIComponent(matchPeer[2]).trim();
-        setActiveRoomCode(code);
+        setActiveRoomCode(matchPeer[1]);
 
         const existing = peers.find((p) => p.name.toLowerCase() === studentName.toLowerCase());
         if (existing) {
@@ -612,8 +615,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
             studyDurationFormatted: '1h 00m',
           });
         }
-      } else if (matchRoom) {
-        const code = matchRoom[1];
+      } else if (code) {
         setSelectedPeer(null);
 
         const isJoined = rooms.some((r) => r.code === code);
@@ -1906,7 +1908,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={`https://myuniwork.app/focus/${shareModalRoom.code}`}
+                  value={`${window.location.origin}/focus/${shareModalRoom.code}`}
                   className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-700 dark:text-slate-300 focus:outline-hidden truncate"
                 />
                 <button
