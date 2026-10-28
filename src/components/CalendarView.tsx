@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Check, Clock, Edit3, Plus, Sparkles, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Clock, Edit3, Sparkles, Play } from 'lucide-react';
 import { CalendarEvent, Task, Tag, CalendarViewType, TaskGroup } from '../types';
 import { COLOR_PRESETS } from './Sidebar';
 import { ActiveTaskHeaderBadge } from './ActiveTaskHeaderBadge';
@@ -2130,26 +2130,7 @@ export default function CalendarView({
         </div>
       )}
 
-      {/* Mobile Touch Screen Quick-Add Floating Action Button (FAB) */}
-      <div className="fixed bottom-6 right-6 md:hidden z-40">
-        <button
-          onClick={() => {
-            if (typeof navigator !== 'undefined' && navigator.vibrate) {
-              navigator.vibrate(20);
-            }
-            const todayStr = formatDateString(selectedDate);
-            const nowMin = currentTime.getHours() * 60 + currentTime.getMinutes();
-            const roundedStartMin = Math.ceil(nowMin / 30) * 30;
-            const startStr = minutesToTimeString(Math.min(1380, roundedStartMin));
-            const endStr = minutesToTimeString(Math.min(1439, roundedStartMin + 60));
-            onOpenCreateModal(todayStr, startStr, endStr);
-          }}
-          className="w-14 h-14 rounded-full bg-[#0066FF] text-white shadow-xl hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center border-2 border-white cursor-pointer"
-          title="Quick Add Event/Task"
-        >
-          <Plus className="w-7 h-7 stroke-[2.5]" />
-        </button>
-      </div>
+
 
       {/* Recurrence Choice Confirmation Dialog Modal Overlay */}
       {recurrencePrompt && (

@@ -2096,6 +2096,8 @@ const inMemoryFocusPointsLogs: FocusPointLog[] = [
   { id: 'seed_3', userId: 'usr-mathias-cheow-primary', plannedMinutes: 25, actualMinutes: 25, pointsEarned: 25, completedAt: new Date(Date.now() - 259200000).toISOString() },
 ];
 
+const userLastIncrementalPointMs = new Map<string, number>();
+
 function calculateUniWorkPoints(plannedMin: number, actualMin: number): number {
   const P = Math.max(1, Math.round(plannedMin || 25));
   const A = Math.max(0, Math.round(actualMin || 0));
@@ -2631,6 +2633,36 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
 
   const code = String(roomCode || "000000").trim();
   const now = Date.now();
+
+  // 30-second live incremental points accrual during active study
+  if (elapsedSeconds > 0) {
+    const lastTick = userLastIncrementalPointMs.get(userId) || 0;
+    if (now - lastTick >= 30000) {
+      userLastIncrementalPointMs.set(userId, now);
+      const pointsEarned = 1;
+      const logId = `pt_inc_${now}_${Math.random().toString(36).substring(2, 6)}`;
+      const nowIso = new Date().toISOString();
+
+      inMemoryFocusPointsLogs.push({
+        id: logId,
+        userId,
+        plannedMinutes: 0.5,
+        actualMinutes: 0.5,
+        pointsEarned,
+        completedAt: nowIso,
+      });
+
+      if (pool) {
+        pool.query(
+          `INSERT INTO uniwork_focus_points_logs (id, user_id, task_id, planned_minutes, actual_minutes, points_earned, completed_at)
+           VALUES ($1, $2, NULL, 0.5, 0.5, $3, CURRENT_TIMESTAMP)`,
+          [logId, userId, pointsEarned]
+        ).catch((err) => {
+          console.warn("DB incremental points log error:", err);
+        });
+      }
+    }
+  }
 
   const record: PresenceRecord = {
     userId,
