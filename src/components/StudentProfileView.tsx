@@ -11,10 +11,9 @@ export interface PeerProfile {
   name: string;
   avatarUrl: string;
   points: number;
-  status: 'studying' | 'overtime';
+  status: 'studying' | 'break' | 'lunch';
   timeLeftMinutes: number;
-  timeLeftSeconds?: number;
-  elapsedSeconds?: number;
+  timeLeftSeconds: number;
   studyDurationFormatted: string;
   isFixedTest?: boolean;
 }
@@ -50,40 +49,24 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
   // Live ticking timer for time remaining & overtime tracking
   const [liveSecondsLeft, setLiveSecondsLeft] = useState<number>(() => {
-    if (peer.timeLeftSeconds !== undefined) return peer.timeLeftSeconds;
-    return peer.timeLeftMinutes > 0 ? peer.timeLeftMinutes * 60 : 0;
+    return peer.timeLeftSeconds > 0 ? peer.timeLeftSeconds : 0;
   });
   const [overtimeSeconds, setOvertimeSeconds] = useState<number>(() => {
-    if (peer.timeLeftSeconds !== undefined && peer.timeLeftSeconds < 0) return Math.abs(peer.timeLeftSeconds);
-    if (peer.elapsedSeconds !== undefined && peer.elapsedSeconds > plannedDurationSec) return peer.elapsedSeconds - plannedDurationSec;
-    return peer.timeLeftMinutes <= 0 ? Math.abs(peer.timeLeftMinutes * 60) : 0;
+    return peer.timeLeftSeconds <= 0 ? Math.abs(peer.timeLeftSeconds) : 0;
   });
-  const [isOvertime, setIsOvertime] = useState<boolean>(() => {
-    if (peer.timeLeftSeconds !== undefined) return peer.timeLeftSeconds <= 0;
-    return peer.timeLeftMinutes <= 0;
-  });
+  const [isOvertime, setIsOvertime] = useState<boolean>(peer.timeLeftSeconds <= 0);
 
   useEffect(() => {
-    if (peer.timeLeftSeconds !== undefined) {
-      if (peer.timeLeftSeconds > 0) {
-        setLiveSecondsLeft(peer.timeLeftSeconds);
-        setOvertimeSeconds(0);
-        setIsOvertime(false);
-      } else {
-        setLiveSecondsLeft(0);
-        setOvertimeSeconds(Math.abs(peer.timeLeftSeconds));
-        setIsOvertime(true);
-      }
-    } else if (peer.timeLeftMinutes > 0) {
-      setLiveSecondsLeft(peer.timeLeftMinutes * 60);
+    if (peer.timeLeftSeconds > 0) {
+      setLiveSecondsLeft(peer.timeLeftSeconds);
       setOvertimeSeconds(0);
       setIsOvertime(false);
     } else {
       setLiveSecondsLeft(0);
-      setOvertimeSeconds(Math.abs(peer.timeLeftMinutes * 60));
+      setOvertimeSeconds(Math.abs(peer.timeLeftSeconds));
       setIsOvertime(true);
     }
-  }, [peer.timeLeftMinutes, peer.timeLeftSeconds]);
+  }, [peer.timeLeftSeconds, peer.id]);
 
   useEffect(() => {
     const timer = setInterval(() => {

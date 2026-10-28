@@ -2292,6 +2292,7 @@ interface PresenceRecord {
   avatarUrl: string;
   points: number;
   timeLeftMinutes: number;
+  timeLeftSeconds?: number;
   elapsedSeconds: number;
   lastHeartbeatMs: number;
 }
@@ -2636,6 +2637,7 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
     avatarUrl = "https://api.dicebear.com/7.x/adventurer/svg?seed=student&backgroundColor=b6e3f4",
     points = 0,
     timeLeftMinutes = 25,
+    timeLeftSeconds = 1500,
     elapsedSeconds = 0,
     roomCode = "000000",
   } = req.body;
@@ -2679,6 +2681,7 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
     avatarUrl,
     points,
     timeLeftMinutes,
+    timeLeftSeconds,
     elapsedSeconds,
     lastHeartbeatMs: now,
   };
@@ -2714,9 +2717,9 @@ app.get("/api/focus/room/peers", async (req, res) => {
           name: p.userName,
           avatarUrl: p.avatarUrl,
           points: p.points,
-          status: "studying",
+          status: (p.timeLeftSeconds || 0) < 0 ? 'overtime' : 'studying',
           timeLeftMinutes: p.timeLeftMinutes,
-          timeLeftSeconds: p.timeLeftMinutes * 60,
+          timeLeftSeconds: p.timeLeftSeconds !== undefined ? p.timeLeftSeconds : p.timeLeftMinutes * 60,
           elapsedSeconds: p.elapsedSeconds,
           studyDurationFormatted: durFmt,
         });
@@ -2782,9 +2785,10 @@ app.get("/api/focus/room/peers", async (req, res) => {
         const elapsedSec = Math.floor((now - startMs) / 1000);
         const remainingSec = plannedSec - elapsedSec;
         
-        const hrs = Math.floor(elapsedSec / 3600);
-        const mins = Math.floor((elapsedSec % 3600) / 60);
-        const durFmt = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        // Correct planned duration string for UI parsing
+        const p_hrs = Math.floor(plannedSec / 3600);
+        const p_mins = Math.floor((plannedSec % 3600) / 60);
+        const plannedFmt = p_hrs > 0 ? `${p_hrs}h ${p_mins}m` : `${p_mins}m`;
 
         peers.push({
           id: bot.id,
@@ -2792,10 +2796,11 @@ app.get("/api/focus/room/peers", async (req, res) => {
           avatarUrl: bot.avatarUrl,
           points: bot.basePoints + Math.floor(elapsedSec / 60),
           status: remainingSec < 0 ? 'overtime' : 'studying',
-          timeLeftMinutes: Math.ceil(remainingSec / 60),
-          timeLeftSeconds: Math.max(0, remainingSec),
+          timeLeftMinutes: Math.max(0, Math.ceil(remainingSec / 60)),
+          timeLeftSeconds: remainingSec, // Allow negative here for StudentProfileView to calculate overtime
           elapsedSeconds: elapsedSec,
-          studyDurationFormatted: durFmt,
+          plannedDurationSec: plannedSec,
+          studyDurationFormatted: plannedFmt, // Should be planned time
           isBot: true,
           major: bot.major,
         });
