@@ -419,6 +419,15 @@ if (dbUrl) {
             recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
           CREATE INDEX IF NOT EXISTS idx_bot_status_log_bot_time ON uniwork_bot_status_log (bot_id, timestamp_ms);
+
+          CREATE TABLE IF NOT EXISTS uniwork_bot_active_sessions (
+            bot_id VARCHAR(100) PRIMARY KEY,
+            session_start_ms BIGINT NOT NULL,
+            planned_duration_sec INT NOT NULL,
+            room_code VARCHAR(10) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'studying',
+            last_updated_ms BIGINT NOT NULL
+          );
         `);
 
         for (const bot of STUDY_BOTS) {
@@ -2707,27 +2716,90 @@ app.get("/api/focus/room/peers", async (req, res) => {
           points: p.points,
           status: "studying",
           timeLeftMinutes: p.timeLeftMinutes,
+          timeLeftSeconds: p.timeLeftMinutes * 60,
+          elapsedSeconds: p.elapsedSeconds,
           studyDurationFormatted: durFmt,
         });
       }
     }
   }
 
-  // Include active simulated study bots
-  const activeBots = getActiveBotsForRoom(code);
-  for (const bot of activeBots) {
-    if (!peers.some(p => p.id === bot.id)) {
-      peers.push({
-        id: bot.id,
-        name: bot.name,
-        avatarUrl: bot.avatarUrl,
-        points: bot.points,
-        status: bot.status,
-        timeLeftMinutes: bot.timeLeftMinutes,
-        studyDurationFormatted: bot.studyDurationFormatted,
-        isBot: true,
-        major: bot.major,
-      });
+  // Include active simulated study bots with persistence
+  if (code === '000000') {
+    const now = Date.now();
+    for (const bot of STUDY_BOTS) {
+      if (peers.some(p => p.id === bot.id)) continue;
+
+      // 1. Check Archetype Active Window (UTC)
+      const d = new Date(now);
+      const h = d.getUTCHours();
+      let active = false;
+      if (bot.archetype === 'early_bird') active = h >= 5 && h < 15;
+      else if (bot.archetype === 'afternoon_grinder') active = h >= 11 && h < 20;
+      else if (bot.archetype === 'night_owl') active = h >= 17 || h < 4;
+      else if (bot.archetype === 'pomodoro_sprinter') active = h >= 8 && h < 18;
+      else if (bot.archetype === 'deep_work') active = h >= 9 && h < 19;
+
+      if (!active) continue;
+
+      // 2. Persistent Session Management
+      let botSession: any = null;
+      if (pool) {
+        try {
+          const res = await pool.query("SELECT * FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
+          if (res.rows.length > 0) {
+            botSession = res.rows[0];
+            const elapsed = Math.floor((now - Number(botSession.session_start_ms)) / 1000);
+            
+            // If session expired (over 4 hours or past planned duration + 15m), reset/re-randomize
+            if (elapsed > Number(botSession.planned_duration_sec) + 900 || elapsed > 14400) {
+              await pool.query("DELETE FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
+              botSession = null;
+            }
+          }
+
+          if (!botSession) {
+            // Create new random persistent session
+            // Random start time between 5m and 120m ago
+            const jitterStartMs = now - (Math.floor(Math.random() * 115 * 60 * 1000) + 300000);
+            const plannedSec = Math.floor(Math.random() * (7200 - 2700 + 1)) + 2700; // 45m to 2h
+            await pool.query(
+              "INSERT INTO uniwork_bot_active_sessions (bot_id, session_start_ms, planned_duration_sec, room_code, status, last_updated_ms) VALUES ($1, $2, $3, $4, $5, $6)",
+              [bot.id, jitterStartMs, plannedSec, '000000', 'studying', now]
+            );
+            const res2 = await pool.query("SELECT * FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
+            botSession = res2.rows[0];
+          }
+        } catch (err) {
+          console.warn("Bot session DB error:", err);
+        }
+      }
+
+      // 3. Calculate State
+      if (botSession) {
+        const startMs = Number(botSession.session_start_ms);
+        const plannedSec = Number(botSession.planned_duration_sec);
+        const elapsedSec = Math.floor((now - startMs) / 1000);
+        const remainingSec = plannedSec - elapsedSec;
+        
+        const hrs = Math.floor(elapsedSec / 3600);
+        const mins = Math.floor((elapsedSec % 3600) / 60);
+        const durFmt = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+        peers.push({
+          id: bot.id,
+          name: bot.name,
+          avatarUrl: bot.avatarUrl,
+          points: bot.basePoints + Math.floor(elapsedSec / 60),
+          status: remainingSec < 0 ? 'overtime' : 'studying',
+          timeLeftMinutes: Math.ceil(remainingSec / 60),
+          timeLeftSeconds: Math.max(0, remainingSec),
+          elapsedSeconds: elapsedSec,
+          studyDurationFormatted: durFmt,
+          isBot: true,
+          major: bot.major,
+        });
+      }
     }
   }
 

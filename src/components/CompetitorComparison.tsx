@@ -596,17 +596,17 @@ export const CompetitorComparison: React.FC = () => {
   const activeTransform = transforms[activeAdjustLogoId] || { x: 0, y: 0, scale: 1 };
 
   return (
-    <section id="why-uniwork" className="pt-10 pb-12 md:pt-12 md:pb-16 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto relative font-sans">
-      
-      {/* SECTION MAIN TITLE (Clean, professional view without any mode indicator) */}
-      <div className="text-center max-w-2xl mx-auto mb-10 relative">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight leading-tight text-white font-['Plus_Jakarta_Sans']">
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
-            UniWork
-          </span>{' '}
-          vs Other Apps
-        </h2>
-      </div>
+    <section id="why-uniwork" className="section relative">
+      <div className="container">
+        {/* SECTION MAIN TITLE */}
+        <div className="text-center max-w-2xl mx-auto mb-16 relative">
+          <h2 className="text-h2 text-white">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+              UniWork
+            </span>{' '}
+            vs Other Apps
+          </h2>
+        </div>
 
       {/* ADJUST MODE TOOLBAR (Appears ONLY when Shift + Tab + Q is pressed) */}
       {isAdjustMode && (
@@ -1091,9 +1091,8 @@ export const CompetitorComparison: React.FC = () => {
           </motion.div>
 
         </div>
-
       </div>
-
-    </section>
+    </div>
+  </section>
   );
 };

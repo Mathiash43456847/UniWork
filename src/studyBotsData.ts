@@ -301,8 +301,10 @@ export interface SimulatedPeerState {
   name: string;
   avatarUrl: string;
   points: number;
-  status: 'studying' | 'break' | 'lunch';
+  status: 'studying' | 'break' | 'lunch' | 'overtime';
   timeLeftMinutes: number;
+  timeLeftSeconds?: number;
+  elapsedSeconds?: number;
   studyDurationFormatted: string;
   taskTitle: string;
   major: string;
@@ -322,11 +324,6 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
   const totalSecondsInDay = hourUTC * 3600 + minuteUTC * 60 + secondUTC;
 
   // Active hours definition per archetype (expressed in 24h UTC scale)
-  // Early Bird: 05:00 - 15:00 UTC
-  // Afternoon Grinder: 11:00 - 20:00 UTC
-  // Night Owl: 17:00 - 04:00 UTC (crosses midnight)
-  // Pomodoro Sprinter: 08:00 - 18:00 UTC
-  // Deep Work: 09:00 - 19:00 UTC
   let isWithinDailyActiveWindow = false;
 
   switch (bot.archetype) {
@@ -358,14 +355,15 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
       : hourUTC === 12 && minuteUTC >= 10 && minuteUTC <= 50;
 
   if (isLunchHour) {
-    const lunchMinutesLeft = Math.max(1, 50 - minuteUTC);
+    const lunchSecondsLeft = 50 * 60 - (minuteUTC * 60 + secondUTC);
     return {
       id: bot.id,
       name: bot.name,
       avatarUrl: bot.avatarUrl,
       points: bot.basePoints,
       status: 'lunch',
-      timeLeftMinutes: lunchMinutesLeft,
+      timeLeftMinutes: Math.ceil(Math.max(1, lunchSecondsLeft) / 60),
+      timeLeftSeconds: Math.max(0, lunchSecondsLeft),
       studyDurationFormatted: 'Lunch Break',
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
@@ -384,15 +382,19 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
     // Actively studying
     const elapsedInCycle = adjustedSeconds;
     const remainingInCycle = studyPortionSec - elapsedInCycle;
-    const timeLeftMinutes = Math.max(1, Math.ceil(remainingInCycle / 60));
+    const timeLeftSeconds = Math.max(1, remainingInCycle);
     const elapsedMinutes = Math.floor(elapsedInCycle / 60);
 
     // Realistic study session duration displayed (e.g. 45m or 1h 20m)
-    const cumulativeHoursToday = Math.floor(((totalSecondsInDay % 14400) / 3600) + 1);
-    const studyDurationFormatted =
-      cumulativeHoursToday > 1
-        ? `${cumulativeHoursToday - 1}h ${String(elapsedMinutes).padStart(2, '0')}m`
-        : `${Math.max(15, elapsedMinutes)}m`;
+    // We use totalSecondsInDay to make it deterministic but randomized per bot
+    const deterministicSessionStartMs = Math.floor(totalSecondsInDay / 14400) * 14400;
+    const totalElapsedSecondsToday = totalSecondsInDay - deterministicSessionStartMs + (bot.phaseOffsetSec % 3600);
+    const hrs = Math.floor(totalElapsedSecondsToday / 3600);
+    const mins = Math.floor((totalElapsedSecondsToday % 3600) / 60);
+    
+    const studyDurationFormatted = hrs > 0 
+      ? `${hrs}h ${String(mins).padStart(2, '0')}m` 
+      : `${Math.max(15, mins)}m`;
 
     // Dynamic points progression: slight points gain as day progresses
     const pointsProgress = bot.basePoints + Math.floor((totalSecondsInDay % 10000) / 1000);
@@ -403,7 +405,9 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
       avatarUrl: bot.avatarUrl,
       points: pointsProgress,
       status: 'studying',
-      timeLeftMinutes,
+      timeLeftMinutes: Math.ceil(timeLeftSeconds / 60),
+      timeLeftSeconds: timeLeftSeconds,
+      elapsedSeconds: totalElapsedSecondsToday,
       studyDurationFormatted,
       taskTitle: bot.currentTaskTitle,
       major: bot.major,

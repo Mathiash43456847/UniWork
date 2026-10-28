@@ -59,9 +59,14 @@ export interface PeerProfile {
   name: string;
   avatarUrl: string;
   points: number;
-  status: 'studying';
+  status: 'studying' | 'break' | 'lunch' | 'overtime';
   timeLeftMinutes: number;
+  timeLeftSeconds?: number;
+  elapsedSeconds?: number;
   studyDurationFormatted: string;
+  isBot?: boolean;
+  major?: string;
+  roomCode?: string;
   isFixedTest?: boolean;
 }
 

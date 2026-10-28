@@ -162,307 +162,336 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
     };
   }, [applyInitialPositions]);
 
-  // Scroll-driven animation controller
+  const targetProgressRef = useRef(0);
+  const currentProgressRef = useRef(0);
+
+  // Scroll-driven animation controller with spring-damped lerp for consistent speed regardless of scroll velocity
   const updateScrollAnimation = useCallback(() => {
     if (!stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
     const vh = window.innerHeight || document.documentElement.clientHeight;
 
-    // Calculate progress when reaching the 3/5 viewport mark of page 2, playing as user scrolls towards page 3
-    const startTrigger = vh * 0.6;
-    const endTrigger = vh * -0.4;
+    const startTrigger = vh * 1.5;
+    const endTrigger = vh * -2.0;
     const currentTop = rect.top;
     
-    let progress = (startTrigger - currentTop) / (startTrigger - endTrigger);
-    progress = Math.max(0, Math.min(1, progress));
+    let targetP = (startTrigger - currentTop) / (startTrigger - endTrigger);
+    targetProgressRef.current = Math.max(0, Math.min(1, targetP));
+  }, []);
 
-    const tRest = 0.04;
-    const tSpread = tRest + 1.15;
-    const tSmash = tSpread + 0.90;
-    const tLogoReveal = tSmash + 0.80;
-    const tHold = tLogoReveal + 1.20;
-    const tCycleBack = tHold + 0.70;
-    const totalCycle = tCycleBack + 1.00;
-
-    const t = progress * totalCycle;
-
-    const { tabWidth, pitch, Rx: baseRx, Ry } = getLayoutMetrics(stageWidthRef.current);
-
-    let Rx = baseRx;
-    if (stageRef.current && typeof window !== 'undefined') {
-      const stageW = stageRef.current.clientWidth || stageWidthRef.current;
-      const maxAllowedRx = (stageW / 2) - (tabWidth / 2) - 16;
-      Rx = Math.min(baseRx, Math.max(1.5 * pitch + 10, maxAllowedRx));
-    }
-
-    const logoEl = logoRef.current;
-
-    if (t <= tRest) {
-      // Initial lineup
-      items.forEach((_, idx) => {
-        const el = itemRefs.current[idx];
-        if (!el) return;
-        const initX = getInitialSlotX(idx, pitch);
-        el.style.width = `${tabWidth}px`;
-        el.style.display = 'flex';
-        el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
-        el.style.opacity = '1';
-      });
-      if (logoEl) {
-        logoEl.style.display = 'none';
-        logoEl.style.opacity = '0';
-        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
-      }
-    } else if (t <= tSpread) {
-      // Outward blossom into cardinal points
-      const u = (t - tRest) / (tSpread - tRest);
-      const eased = easeInOutCubic(u);
-
-      items.forEach((item, idx) => {
-        const el = itemRefs.current[idx];
-        if (!el) return;
-
-        const initX = getInitialSlotX(idx, pitch);
-        const baseAngle = item.baseAngle;
-
-        const targetBloomX = Rx * Math.cos(baseAngle);
-        const targetBloomY = -Ry * Math.sin(baseAngle);
-
-        const rowX = (1 - eased) * initX + eased * targetBloomX;
-        const rowY = eased * targetBloomY + Math.sin(u * Math.PI) * 18 * (idx % 2 === 0 ? 1 : -1);
-
-        el.style.display = 'flex';
-        el.style.transform = `translate3d(calc(-50% + ${rowX}px), calc(-50% + ${rowY}px), 0px) scale(1)`;
-        el.style.opacity = '1';
-      });
-
-      if (logoEl) {
-        logoEl.style.display = 'none';
-        logoEl.style.opacity = '0';
-        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
-      }
-    } else if (t <= tSmash) {
-      // Inward swirl & smash collision
-      const u = (t - tSpread) / (tSmash - tSpread);
-      const easedPlunge = Math.pow(u, 1.75);
-      const currentRx = Rx * (1 - easedPlunge);
-      const currentRy = Ry * (1 - easedPlunge);
-
-      items.forEach((item, idx) => {
-        const el = itemRefs.current[idx];
-        if (!el) return;
-
-        const baseAngle = item.baseAngle;
-        const currentAngle = baseAngle + u * (Math.PI * 1.35);
-
-        const targetX = currentRx * Math.cos(currentAngle);
-        const targetY = -currentRy * Math.sin(currentAngle);
-        const scale = 1 - u * 0.15;
-        const opacity = u >= 0.94 ? Math.max(0, (1 - u) / 0.06) : 1;
-
-        el.style.display = 'flex';
-        el.style.transform = `translate3d(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px), 0px) scale(${scale})`;
-        el.style.opacity = `${opacity}`;
-      });
-
-      if (logoEl) {
-        logoEl.style.display = 'none';
-        logoEl.style.opacity = '0';
-        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
-      }
-    } else if (t <= tLogoReveal) {
-      // UniWork logo reveal
-      items.forEach((_, idx) => {
-        const el = itemRefs.current[idx];
-        if (el) {
-          el.style.display = 'none';
-          el.style.opacity = '0';
-        }
-      });
-
-      if (logoEl) {
-        logoEl.style.display = 'flex';
-        const uLogo = Math.min(1, (t - tSmash) / (tLogoReveal - tSmash));
-        const easedLogoP = easeOutQuart(uLogo);
-        const logoOpacity = Math.min(1, uLogo * 2.8);
-
-        logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${easedLogoP})`;
-        logoEl.style.opacity = `${logoOpacity}`;
-      }
-    } else if (t <= tHold) {
-      // Brand hold
-      items.forEach((_, idx) => {
-        const el = itemRefs.current[idx];
-        if (el) {
-          el.style.display = 'none';
-          el.style.opacity = '0';
-        }
-      });
-
-      if (logoEl) {
-        logoEl.style.display = 'flex';
-        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(1)';
-        logoEl.style.opacity = '1';
-      }
-    } else if (t <= tCycleBack) {
-      // Dissolve logo & emerge tabs
-      const u = (t - tHold) / (tCycleBack - tHold);
-      const eased = easeInOutCubic(u);
-
-      if (logoEl) {
-        logoEl.style.display = 'flex';
-        logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${1 - 0.15 * eased})`;
-        logoEl.style.opacity = `${1 - eased}`;
-      }
-
-      items.forEach((item, idx) => {
-        const el = itemRefs.current[idx];
-        if (!el) return;
-
-        const initX = getInitialSlotX(idx, pitch);
-        const currentX = initX * eased;
-        const currentScale = 0.88 + 0.12 * eased;
-
-        el.style.width = `${tabWidth}px`;
-        el.style.display = 'flex';
-        el.style.transform = `translate3d(calc(-50% + ${currentX}px), -50%, 0px) scale(${currentScale})`;
-        el.style.opacity = `${eased}`;
-      });
-    } else {
-      // Rest in lineup
-      if (logoEl) {
-        logoEl.style.display = 'none';
-        logoEl.style.opacity = '0';
-      }
-
-      items.forEach((_, idx) => {
-        const el = itemRefs.current[idx];
-        if (!el) return;
-
-        const initX = getInitialSlotX(idx, pitch);
-        el.style.width = `${tabWidth}px`;
-        el.style.display = 'flex';
-        el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
-        el.style.opacity = '1';
-      });
-    }
-  }, [getLayoutMetrics, getInitialSlotX]);
-
-  // Attach scroll listeners
+  // Continuous animation loop for butter-smooth lerped progress
   useEffect(() => {
     applyInitialPositions(stageWidthRef.current);
+    let animId: number;
 
-    let ticking = false;
-    const onScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          updateScrollAnimation();
-          ticking = false;
-        });
-        ticking = true;
+    const renderLoop = () => {
+      // Lerp currentProgress towards targetProgress with dampening factor (0.10)
+      const diff = targetProgressRef.current - currentProgressRef.current;
+      currentProgressRef.current += diff * 0.10;
+
+      const progress = currentProgressRef.current;
+
+      const tRest = 0.04;
+      const tSpread = tRest + 1.15;
+      const tSmash = tSpread + 0.90;
+      const tLogoReveal = tSmash + 0.80;
+      const tHold = tLogoReveal + 1.20;
+      const tCycleBack = tHold + 0.70;
+      const totalCycle = tCycleBack + 1.00;
+
+      const t = progress * totalCycle;
+
+      const { tabWidth, pitch, Rx: baseRx, Ry } = getLayoutMetrics(stageWidthRef.current);
+
+      let Rx = baseRx;
+      if (stageRef.current && typeof window !== 'undefined') {
+        const stageW = stageRef.current.clientWidth || stageWidthRef.current;
+        const maxAllowedRx = (stageW / 2) - (tabWidth / 2) - 16;
+        Rx = Math.min(baseRx, Math.max(1.5 * pitch + 10, maxAllowedRx));
       }
+
+      const logoEl = logoRef.current;
+
+      if (t <= tRest) {
+        // Initial lineup
+        items.forEach((_, idx) => {
+          const el = itemRefs.current[idx];
+          if (!el) return;
+          const initX = getInitialSlotX(idx, pitch);
+          el.style.width = `${tabWidth}px`;
+          el.style.display = 'flex';
+          el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
+          el.style.opacity = '1';
+        });
+        if (logoEl) {
+          logoEl.style.display = 'none';
+          logoEl.style.opacity = '0';
+          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+        }
+      } else if (t <= tSpread) {
+        // Outward blossom into cardinal points
+        const u = (t - tRest) / (tSpread - tRest);
+        const eased = easeInOutCubic(u);
+
+        items.forEach((item, idx) => {
+          const el = itemRefs.current[idx];
+          if (!el) return;
+
+          const initX = getInitialSlotX(idx, pitch);
+          const baseAngle = item.baseAngle;
+
+          const targetBloomX = Rx * Math.cos(baseAngle);
+          const targetBloomY = -Ry * Math.sin(baseAngle);
+
+          const rowX = (1 - eased) * initX + eased * targetBloomX;
+          const rowY = eased * targetBloomY + Math.sin(u * Math.PI) * 18 * (idx % 2 === 0 ? 1 : -1);
+
+          el.style.display = 'flex';
+          el.style.transform = `translate3d(calc(-50% + ${rowX}px), calc(-50% + ${rowY}px), 0px) scale(1)`;
+          el.style.opacity = '1';
+        });
+
+        if (logoEl) {
+          logoEl.style.display = 'none';
+          logoEl.style.opacity = '0';
+          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+        }
+      } else if (t <= tSmash) {
+        // Inward swirl & smash collision
+        const u = (t - tSpread) / (tSmash - tSpread);
+        const easedPlunge = Math.pow(u, 1.75);
+        const currentRx = Rx * (1 - easedPlunge);
+        const currentRy = Ry * (1 - easedPlunge);
+
+        items.forEach((item, idx) => {
+          const el = itemRefs.current[idx];
+          if (!el) return;
+
+          const baseAngle = item.baseAngle;
+          const currentAngle = baseAngle + u * (Math.PI * 1.35);
+
+          const targetX = currentRx * Math.cos(currentAngle);
+          const targetY = -currentRy * Math.sin(currentAngle);
+          const scale = 1 - u * 0.15;
+          const opacity = u >= 0.94 ? Math.max(0, (1 - u) / 0.06) : 1;
+
+          el.style.display = 'flex';
+          el.style.transform = `translate3d(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px), 0px) scale(${scale})`;
+          el.style.opacity = `${opacity}`;
+        });
+
+        if (logoEl) {
+          logoEl.style.display = 'none';
+          logoEl.style.opacity = '0';
+          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+        }
+      } else if (t <= tLogoReveal) {
+        // UniWork logo reveal
+        items.forEach((_, idx) => {
+          const el = itemRefs.current[idx];
+          if (el) {
+            el.style.display = 'none';
+            el.style.opacity = '0';
+          }
+        });
+
+        if (logoEl) {
+          logoEl.style.display = 'flex';
+          const uLogo = Math.min(1, (t - tSmash) / (tLogoReveal - tSmash));
+          const easedLogoP = easeOutQuart(uLogo);
+          const logoOpacity = Math.min(1, uLogo * 2.8);
+
+          logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${easedLogoP})`;
+          logoEl.style.opacity = `${logoOpacity}`;
+        }
+      } else if (t <= tHold) {
+        // Brand hold
+        items.forEach((_, idx) => {
+          const el = itemRefs.current[idx];
+          if (el) {
+            el.style.display = 'none';
+            el.style.opacity = '0';
+          }
+        });
+
+        if (logoEl) {
+          logoEl.style.display = 'flex';
+          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(1)';
+          logoEl.style.opacity = '1';
+        }
+      } else if (t <= tCycleBack) {
+        // Dissolve logo & emerge tabs
+        const u = (t - tHold) / (tCycleBack - tHold);
+        const eased = easeInOutCubic(u);
+
+        if (logoEl) {
+          logoEl.style.display = 'flex';
+          logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${1 - 0.15 * eased})`;
+          logoEl.style.opacity = `${1 - eased}`;
+        }
+
+        items.forEach((item, idx) => {
+          const el = itemRefs.current[idx];
+          if (!el) return;
+
+          const initX = getInitialSlotX(idx, pitch);
+          const currentX = initX * eased;
+          const currentScale = 0.88 + 0.12 * eased;
+
+          el.style.width = `${tabWidth}px`;
+          el.style.display = 'flex';
+          el.style.transform = `translate3d(calc(-50% + ${currentX}px), -50%, 0px) scale(${currentScale})`;
+          el.style.opacity = `${eased}`;
+        });
+      } else {
+        // Rest in lineup
+        if (logoEl) {
+          logoEl.style.display = 'none';
+          logoEl.style.opacity = '0';
+        }
+
+        items.forEach((_, idx) => {
+          const el = itemRefs.current[idx];
+          if (!el) return;
+
+          const initX = getInitialSlotX(idx, pitch);
+          el.style.width = `${tabWidth}px`;
+          el.style.display = 'flex';
+          el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
+          el.style.opacity = '1';
+        });
+      }
+
+      animId = requestAnimationFrame(renderLoop);
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
+    animId = requestAnimationFrame(renderLoop);
+
+    const onScrollOrResize = () => {
+      updateScrollAnimation();
+    };
+
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
 
     const scrollContainer = document.getElementById('uniwork-about-page');
     if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+      scrollContainer.addEventListener('scroll', onScrollOrResize, { passive: true });
     }
 
     updateScrollAnimation();
 
     return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      cancelAnimationFrame(animId);
+      window.removeEventListener('scroll', onScrollOrResize);
+      window.removeEventListener('resize', onScrollOrResize);
       if (scrollContainer) {
-        scrollContainer.removeEventListener('scroll', onScroll);
+        scrollContainer.removeEventListener('scroll', onScrollOrResize);
       }
     };
-  }, [applyInitialPositions, updateScrollAnimation]);
+  }, [applyInitialPositions, updateScrollAnimation, getLayoutMetrics, getInitialSlotX]);
 
   const { tabWidth, pitch } = getLayoutMetrics(stageWidth);
+  const isMobile = typeof window !== 'undefined' && stageWidth < 1024;
 
   return (
     <section 
       ref={containerRef}
       id="one-workspace" 
-      className="py-8 md:py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative"
+      className="section relative overflow-hidden"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 xl:gap-20 items-center relative z-10">
-        
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-5 flex flex-col justify-center text-left">
-          <h2 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[46px] font-extrabold text-white tracking-tight leading-[1.18]">
-            Everything you need. <br />
-            <span className="inline-block whitespace-nowrap text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
-              One connected workspace.
-            </span>
-          </h2>
+      <div className="container">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-12 lg:gap-16">
+          
+          {/* LEFT COLUMN */}
+          <div className="flex-1 flex flex-col justify-center text-left">
+            <h2 className="text-h2 text-white mb-6">
+              Everything you need. <br />
+              <span className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+                One connected workspace.
+              </span>
+            </h2>
 
-          <p className="mt-5 text-slate-300 text-sm sm:text-base lg:text-lg leading-relaxed font-normal max-w-xl">
-            UniWork brings your calendar, tasks, goals and focus sessions into one connected workspace. Organise your daily schedule, stay on top of your work and turn plans into consistent progress without having to juggle separate productivity tools.
-          </p>
-        </div>
+            <p className="text-body max-w-xl">
+              UniWork brings your calendar, tasks, goals and focus sessions into one connected workspace. Organise your daily schedule, stay on top of your work and turn plans into consistent progress without having to juggle separate productivity tools.
+            </p>
+          </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="lg:col-span-7 flex flex-col items-center justify-center w-full min-w-0">
-          <div 
-            ref={stageRef}
-            className="w-full relative min-h-[380px] sm:min-h-[420px] lg:min-h-[465px] flex items-center justify-center select-none overflow-visible"
-          >
-            {/* THE FOUR COMPONENT BUTTONS / NODES */}
-            {items.map((item, idx) => {
-              const Icon = item.icon;
-              const initialSlotX = getInitialSlotX(idx, pitch);
+          {/* RIGHT COLUMN */}
+          <div className="flex-1 flex flex-col items-center justify-center w-full min-w-0">
+            {isMobile ? (
+              /* MOBILE/TABLET: STATIC AUTO-GRID */
+              <div className="auto-grid">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`h-16 flex items-center justify-center gap-3 px-6 rounded-2xl bg-slate-900/95 border ${item.borderColor} shadow-xl backdrop-blur-md transition-all ring-1 ring-white/10`}
+                    >
+                      <Icon className={`w-5 h-5 flex-shrink-0 ${item.accentColor}`} />
+                      <span className="text-white text-base font-bold tracking-tight whitespace-nowrap">
+                        {item.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* DESKTOP: ORBITAL ANIMATION */
+              <div 
+                ref={stageRef}
+                className="w-full relative min-h-[465px] flex items-center justify-center select-none overflow-visible"
+              >
+                {items.map((item, idx) => {
+                  const Icon = item.icon;
+                  const initialSlotX = getInitialSlotX(idx, pitch);
 
-              return (
+                  return (
+                    <div
+                      key={item.id}
+                      ref={(el) => (itemRefs.current[idx] = el)}
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: `${tabWidth}px`,
+                        transform: `translate3d(calc(-50% + ${initialSlotX}px), -50%, 0px)`,
+                        willChange: 'transform, opacity',
+                      }}
+                      className={`z-20 h-[50px] flex items-center justify-center gap-2.5 px-5 rounded-2xl bg-slate-900/95 border ${item.borderColor} shadow-xl shadow-black/50 backdrop-blur-md pointer-events-none ring-1 ring-white/10 shrink-0 text-center`}
+                    >
+                      <Icon className={`w-[19px] h-[19px] flex-shrink-0 ${item.accentColor}`} />
+                      <span className="text-white text-[14px] font-bold tracking-tight whitespace-nowrap">
+                        {item.label}
+                      </span>
+                    </div>
+                  );
+                })}
+
                 <div
-                  key={item.id}
-                  ref={(el) => (itemRefs.current[idx] = el)}
+                  ref={logoRef}
                   style={{
                     position: 'absolute',
                     top: '50%',
                     left: '50%',
-                    width: `${tabWidth}px`,
-                    transform: `translate3d(calc(-50% + ${initialSlotX}px), -50%, 0px)`,
+                    transform: 'translate3d(-50%, -50%, 0px) scale(0)',
+                    opacity: 0,
+                    display: 'none',
                     willChange: 'transform, opacity',
                   }}
-                  className={`z-20 h-11 sm:h-12 md:h-[48px] lg:h-[50px] flex items-center justify-center gap-2 sm:gap-2.5 px-3.5 sm:px-4 md:px-5 rounded-xl sm:rounded-2xl bg-slate-900/95 border ${item.borderColor} shadow-xl shadow-black/50 backdrop-blur-md pointer-events-none transition-shadow ring-1 ring-white/10 shrink-0 text-center`}
+                  className="z-30 flex items-center justify-center pointer-events-none"
                 >
-                  <Icon className={`w-4.5 h-4.5 sm:w-[18px] sm:h-[18px] md:w-[19px] md:h-[19px] flex-shrink-0 ${item.accentColor}`} />
-                  <span className="text-white text-[12px] sm:text-[13px] md:text-[13.5px] lg:text-[14px] font-bold tracking-tight whitespace-nowrap">
-                    {item.label}
-                  </span>
+                  <img 
+                    src={UNIWORK_DARK_LOGO_BASE64} 
+                    alt="UniWork" 
+                    className="h-32 w-auto object-contain select-none"
+                  />
                 </div>
-              );
-            })}
-
-            {/* CENTRAL REVEAL: PURE UNIWORK LOGO */}
-            <div
-              ref={logoRef}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate3d(-50%, -50%, 0px) scale(0)',
-                opacity: 0,
-                display: 'none',
-                willChange: 'transform, opacity',
-              }}
-              className="z-30 flex items-center justify-center pointer-events-none"
-            >
-              <img 
-                src={UNIWORK_DARK_LOGO_BASE64} 
-                alt="UniWork" 
-                className="h-20 sm:h-24 md:h-28 lg:h-32 w-auto object-contain select-none"
-              />
-            </div>
-
+              </div>
+            )}
           </div>
         </div>
-
       </div>
     </section>
   );
