@@ -301,15 +301,26 @@ export interface SimulatedPeerState {
   name: string;
   avatarUrl: string;
   points: number;
-  status: 'studying' | 'break' | 'lunch' | 'overtime';
+  status: 'studying' | 'break' | 'lunch';
   timeLeftMinutes: number;
-  timeLeftSeconds?: number;
-  elapsedSeconds?: number;
   studyDurationFormatted: string;
   taskTitle: string;
   major: string;
   roomCode: string;
   isBot: boolean;
+}
+
+/**
+ * Deterministic hash function for strings to ensure consistent bot behavior.
+ */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
 }
 
 /**
@@ -324,46 +335,56 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
   const totalSecondsInDay = hourUTC * 3600 + minuteUTC * 60 + secondUTC;
 
   // Active hours definition per archetype (expressed in 24h UTC scale)
-  let isWithinDailyActiveWindow = false;
+  let windowStartHour = 9;
+  let windowEndHour = 19;
 
   switch (bot.archetype) {
     case 'early_bird':
-      isWithinDailyActiveWindow = hourUTC >= 5 && hourUTC < 15;
+      windowStartHour = 5; windowEndHour = 15;
       break;
     case 'afternoon_grinder':
-      isWithinDailyActiveWindow = hourUTC >= 11 && hourUTC < 20;
+      windowStartHour = 11; windowEndHour = 20;
       break;
     case 'night_owl':
-      isWithinDailyActiveWindow = hourUTC >= 17 || hourUTC < 4;
+      // Handled specially as it crosses midnight
+      windowStartHour = 17; windowEndHour = 4;
       break;
     case 'pomodoro_sprinter':
-      isWithinDailyActiveWindow = hourUTC >= 8 && hourUTC < 18;
+      windowStartHour = 8; windowEndHour = 18;
       break;
     case 'deep_work':
-      isWithinDailyActiveWindow = hourUTC >= 9 && hourUTC < 19;
+      windowStartHour = 9; windowEndHour = 19;
       break;
+  }
+
+  let isWithinDailyActiveWindow = false;
+  if (windowStartHour < windowEndHour) {
+    isWithinDailyActiveWindow = hourUTC >= windowStartHour && hourUTC < windowEndHour;
+  } else {
+    // Crosses midnight (night_owl)
+    isWithinDailyActiveWindow = hourUTC >= windowStartHour || hourUTC < windowEndHour;
   }
 
   if (!isWithinDailyActiveWindow) {
     return null; // Bot is currently offline/sleeping
   }
 
-  // Check for Human Lunch Break (12:00 - 13:00 for daytime students, 19:30 - 20:30 for night owls)
+  // Check for Human Lunch Break
   const isLunchHour =
     bot.archetype === 'night_owl'
       ? (hourUTC === 19 && minuteUTC >= 30) || (hourUTC === 20 && minuteUTC < 30)
       : hourUTC === 12 && minuteUTC >= 10 && minuteUTC <= 50;
 
   if (isLunchHour) {
-    const lunchSecondsLeft = 50 * 60 - (minuteUTC * 60 + secondUTC);
+    const lunchMinutesLeft = Math.max(1, 50 - minuteUTC);
     return {
       id: bot.id,
       name: bot.name,
       avatarUrl: bot.avatarUrl,
       points: bot.basePoints,
       status: 'lunch',
-      timeLeftMinutes: Math.ceil(Math.max(1, lunchSecondsLeft) / 60),
-      timeLeftSeconds: Math.max(0, lunchSecondsLeft),
+      timeLeftMinutes: lunchMinutesLeft,
+      timeLeftSeconds: lunchMinutesLeft * 60,
       studyDurationFormatted: 'Lunch Break',
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
@@ -372,32 +393,64 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
     };
   }
 
+  // Calculate a deterministic "Session Start" for this bot for the current day
+  // We want bots to have been studying for a varied amount of time (15m to 4h)
+  const botHash = hashString(bot.id);
+  const daySeed = Math.floor(timestampMs / (1000 * 60 * 60 * 24));
+  const dailyOffset = (hashString(bot.id + daySeed) % 10800); // up to 3 hours variety
+  
+  // Base start time is the start of their window plus a varied offset
+  // But we want to ensure that if it's currently 10:00 and they started at 5:00, 
+  // they might be on their 2nd or 3rd "block" of the day.
+  
   // Micro-cycle calculation (Pomodoro or 50m block + 10m break)
-  // We offset by bot.phaseOffsetSec to distribute the breaks across different minutes!
   const cycleLengthSec = bot.archetype === 'pomodoro_sprinter' ? 1800 : 3600; // 30m vs 60m
   const studyPortionSec = bot.archetype === 'pomodoro_sprinter' ? 1500 : 3000; // 25m vs 50m
+  
+  // Use bot's specific phase offset to de-sync their breaks
   const adjustedSeconds = (totalSecondsInDay + bot.phaseOffsetSec) % cycleLengthSec;
 
   if (adjustedSeconds < studyPortionSec) {
     // Actively studying
     const elapsedInCycle = adjustedSeconds;
     const remainingInCycle = studyPortionSec - elapsedInCycle;
-    const timeLeftSeconds = Math.max(1, remainingInCycle);
-    const elapsedMinutes = Math.floor(elapsedInCycle / 60);
-
-    // Realistic study session duration displayed (e.g. 45m or 1h 20m)
-    // We use totalSecondsInDay to make it deterministic but randomized per bot
-    const deterministicSessionStartMs = Math.floor(totalSecondsInDay / 14400) * 14400;
-    const totalElapsedSecondsToday = totalSecondsInDay - deterministicSessionStartMs + (bot.phaseOffsetSec % 3600);
-    const hrs = Math.floor(totalElapsedSecondsToday / 3600);
-    const mins = Math.floor((totalElapsedSecondsToday % 3600) / 60);
+    const timeLeftSeconds = remainingInCycle;
+    const timeLeftMinutes = Math.max(1, Math.ceil(timeLeftSeconds / 60));
     
-    const studyDurationFormatted = hrs > 0 
-      ? `${hrs}h ${String(mins).padStart(2, '0')}m` 
-      : `${Math.max(15, mins)}m`;
+    // Better Study Duration logic:
+    // How long have they been in THIS specific study block?
+    const elapsedMinutes = Math.floor(elapsedInCycle / 60);
+    const elapsedSecondsInMins = elapsedInCycle % 60;
 
-    // Dynamic points progression: slight points gain as day progresses
-    const pointsProgress = bot.basePoints + Math.floor((totalSecondsInDay % 10000) / 1000);
+    // And how many blocks have they done today?
+    // We calculate "hours studied today" based on how far we are into their active window
+    let secondsIntoWindow = 0;
+    if (windowStartHour < windowEndHour) {
+      secondsIntoWindow = totalSecondsInDay - (windowStartHour * 3600);
+    } else {
+      // Crosses midnight
+      secondsIntoWindow = hourUTC >= windowStartHour 
+        ? totalSecondsInDay - (windowStartHour * 3600)
+        : totalSecondsInDay + ((24 - windowStartHour) * 3600);
+    }
+    
+    // We vary the "start delay" so some bots just joined 20m ago, some 3h ago
+    const startDelaySec = (botHash % 7200); // up to 2 hours delay after window starts
+    const effectiveElapsedSec = Math.max(0, secondsIntoWindow - startDelaySec);
+    
+    // Format duration: "1h 24m"
+    const totalHours = Math.floor(effectiveElapsedSec / 3600);
+    const totalMins = Math.floor((effectiveElapsedSec % 3600) / 60);
+    
+    let studyDurationFormatted = '';
+    if (totalHours > 0) {
+      studyDurationFormatted = `${totalHours}h ${String(totalMins).padStart(2, '0')}m`;
+    } else {
+      studyDurationFormatted = `${Math.max(5, totalMins)}m`;
+    }
+
+    // Dynamic points progression
+    const pointsProgress = bot.basePoints + Math.floor(effectiveElapsedSec / 300); // +1pt every 5 mins
 
     return {
       id: bot.id,
@@ -405,9 +458,8 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
       avatarUrl: bot.avatarUrl,
       points: pointsProgress,
       status: 'studying',
-      timeLeftMinutes: Math.ceil(timeLeftSeconds / 60),
-      timeLeftSeconds: timeLeftSeconds,
-      elapsedSeconds: totalElapsedSecondsToday,
+      timeLeftMinutes,
+      timeLeftSeconds,
       studyDurationFormatted,
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
@@ -418,15 +470,17 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
     // On a short rest/coffee break
     const breakElapsed = adjustedSeconds - studyPortionSec;
     const breakTotal = cycleLengthSec - studyPortionSec;
-    const breakRemainingMinutes = Math.max(1, Math.ceil((breakTotal - breakElapsed) / 60));
+    const breakRemainingSeconds = breakTotal - breakElapsed;
+    const breakRemainingMinutes = Math.max(1, Math.ceil(breakRemainingSeconds / 60));
 
     return {
       id: bot.id,
       name: bot.name,
       avatarUrl: bot.avatarUrl,
-      points: bot.basePoints,
+      points: bot.basePoints + 10, // Slight boost for finishing a block
       status: 'break',
       timeLeftMinutes: breakRemainingMinutes,
+      timeLeftSeconds: breakRemainingSeconds,
       studyDurationFormatted: `${breakRemainingMinutes}m break`,
       taskTitle: bot.currentTaskTitle,
       major: bot.major,

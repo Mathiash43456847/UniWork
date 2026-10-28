@@ -687,16 +687,16 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
 
       <div className="pb-24 w-full">
             {/* HERO SECTION */}
-            <section id="about-hero" className="relative section flex flex-col items-center pt-32 md:pt-36 bg-gradient-to-b from-[#0a0e1a] via-[#0d1326] to-[#0a0e1a] border-b border-white/[0.08]">
+            <section id="about-hero" className="relative min-h-[100dvh] flex flex-col justify-between items-center bg-gradient-to-b from-[#0a0e1a] via-[#0d1326] to-[#0a0e1a] border-b border-white/[0.08] py-8">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none" />
               
-              <div className="container relative z-10 flex flex-col items-center justify-center text-center">
+              <div className="container relative z-10 flex-1 flex flex-col items-center justify-center text-center">
                 <div className="w-full flex flex-col items-center mb-8">
-                  <h1 className="w-full mb-6">
+                  <h1 className="w-full mb-6 text-hero">
                     <LiquidInkText text="Your Unified Workspace" />
                   </h1>
 
-                  <p className="text-body max-w-2xl mx-auto">
+                  <p className="text-body max-w-2xl mx-auto text-slate-300">
                     Plan your day, stay focused and track your progress, all in one place.
                   </p>
                 </div>

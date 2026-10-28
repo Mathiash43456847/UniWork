@@ -59,14 +59,10 @@ export interface PeerProfile {
   name: string;
   avatarUrl: string;
   points: number;
-  status: 'studying' | 'break' | 'lunch' | 'overtime';
+  status: 'studying' | 'break' | 'lunch';
   timeLeftMinutes: number;
-  timeLeftSeconds?: number;
-  elapsedSeconds?: number;
+  timeLeftSeconds: number;
   studyDurationFormatted: string;
-  isBot?: boolean;
-  major?: string;
-  roomCode?: string;
   isFixedTest?: boolean;
 }
 
@@ -505,8 +501,9 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       name: b.name,
       avatarUrl: b.avatarUrl,
       points: b.points,
-      status: b.status,
+      status: b.status as any,
       timeLeftMinutes: b.timeLeftMinutes,
+      timeLeftSeconds: b.timeLeftSeconds,
       studyDurationFormatted: b.studyDurationFormatted,
       isBot: true,
       major: b.major,
@@ -523,8 +520,9 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         name: b.name,
         avatarUrl: b.avatarUrl,
         points: b.points,
-        status: b.status,
+        status: b.status as any,
         timeLeftMinutes: b.timeLeftMinutes,
+        timeLeftSeconds: b.timeLeftSeconds,
         studyDurationFormatted: b.studyDurationFormatted,
         isBot: true,
         major: b.major,
@@ -671,8 +669,9 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       name: b.name,
       avatarUrl: b.avatarUrl,
       points: b.points,
-      status: b.status,
+      status: b.status as any,
       timeLeftMinutes: b.timeLeftMinutes,
+      timeLeftSeconds: b.timeLeftSeconds,
       studyDurationFormatted: b.studyDurationFormatted,
       isBot: true,
       major: b.major,
