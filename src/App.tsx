@@ -2087,96 +2087,99 @@ export default function App() {
 
       {/* 2. Main Content Display Area */}
       <main className={`flex-1 flex flex-col h-full overflow-hidden relative bg-slate-100 dark:bg-[#070A11] ${currentUser && effectiveDeviceType === 'Phone' ? 'pb-16 md:pb-0' : ''}`} id="larkcal-main-content">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8, scale: 0.995 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.995 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 flex flex-col h-full w-full overflow-hidden bg-slate-50 dark:bg-[#070A11]"
-          >
-            {activeTab === 'calendar' ? (
-              <CalendarView
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                events={events}
-                tasks={tasks}
-                tags={tags}
-                groups={groups}
-                onOpenCreateModal={handleOpenCreateModal}
-                onOpenEditModal={handleOpenEditModal}
-                onToggleTaskStatus={handleToggleTaskStatus}
-                onUpdateEvent={handleUpdateEventFields}
-                onUpdateTask={handleUpdateTaskFields}
-                onSaveEvent={handleSaveEvent}
-                onSplitRecurringEvent={handleSplitRecurringEvent}
-                onUpdateRecurringSeries={handleUpdateRecurringSeries}
-                calendarGap={calendarGap}
-                snapInterval={snapInterval}
-                recurrenceBehavior={recurrenceBehavior}
-                onSaveRecurrenceBehavior={handleSaveRecurrenceBehavior}
-                isModalOpen={isModalOpen}
-                modalDefaultDate={modalDefaultDate}
-                modalDefaultStartTime={modalDefaultStartTime}
-                modalDefaultEndTime={modalDefaultEndTime}
-                modalEditItem={modalEditItem}
-                onUpdateModalTimes={handleModalTimeChange}
-                onStartTask={handleStartTaskInFocus}
-                activeFocusTaskId={activeFocusTask?.id || null}
-                activeFocusTask={activeFocusTask}
-                isFocusRunning={isFocusRunning}
-                onNavigateToFocus={() => setActiveTab('focus')}
-                deviceType={effectiveDeviceType}
-              />
-            ) : activeTab === 'focus' ? (
-              <FocusRoomView
-                task={activeFocusTask}
-                allTasks={tasks}
-                tags={tags}
-                userId={getActiveUserId()}
-                initialRoomCode={initialFocusRoomCode}
-                onCompleteTask={handleCompleteFocusTask}
-                onEndIncomplete={handleEndFocusIncomplete}
-                onTimerRunningChange={(running) => setIsFocusRunning(running)}
-                onSetSidebarCollapsed={setSidebarCollapsed}
-              />
-            ) : activeTab === 'tasks' ? (
-              <TasksView
-                tasks={tasks}
-                groups={groups}
-                goals={goals}
-                onAddTask={handleAddTask}
-                onUpdateTask={handleUpdateTaskFields}
-                onDeleteTask={handleDeleteTask}
-                onOpenEditModal={handleOpenEditModal}
-                onOpenCreateModal={handleOpenCreateModal}
-                onAddGroup={handleAddGroup}
-                onDeleteGroup={handleDeleteGroup}
-                onUpdateGroup={handleUpdateGroup}
-                onToggleTaskStatus={handleToggleTaskStatus}
-                sidebarCollapsed={sidebarCollapsed}
-                setSidebarCollapsed={setSidebarCollapsed}
-                activeFocusTask={activeFocusTask}
-                isFocusRunning={isFocusRunning}
-                onNavigateToFocus={() => setActiveTab('focus')}
-              />
-            ) : activeTab === 'goals' ? (
-              <GoalsView
-                goals={goals}
-                events={events}
-                tasks={tasks}
-                tags={tags}
-                groups={groups}
-                onAddGoal={handleAddGoal}
-                onUpdateGoal={handleUpdateGoal}
-                onDeleteGoal={handleDeleteGoal}
-                onToggleGoalComplete={handleToggleGoalComplete}
-                activeFocusTask={activeFocusTask}
-                isFocusRunning={isFocusRunning}
-                onNavigateToFocus={() => setActiveTab('focus')}
-              />
-            ) : activeTab === 'insights' ? (
+        <div className="flex-1 flex flex-col h-full w-full overflow-hidden bg-slate-50 dark:bg-[#070A11] relative">
+          {/* Primary 4 Core Tabs - Kept alive for instantaneous 0ms tab switching & zero state loss */}
+          <div className={`flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 ${activeTab === 'calendar' ? 'flex z-10' : 'hidden'}`}>
+            <CalendarView
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              events={events}
+              tasks={tasks}
+              tags={tags}
+              groups={groups}
+              onOpenCreateModal={handleOpenCreateModal}
+              onOpenEditModal={handleOpenEditModal}
+              onToggleTaskStatus={handleToggleTaskStatus}
+              onUpdateEvent={handleUpdateEventFields}
+              onUpdateTask={handleUpdateTaskFields}
+              onSaveEvent={handleSaveEvent}
+              onSplitRecurringEvent={handleSplitRecurringEvent}
+              onUpdateRecurringSeries={handleUpdateRecurringSeries}
+              calendarGap={calendarGap}
+              snapInterval={snapInterval}
+              recurrenceBehavior={recurrenceBehavior}
+              onSaveRecurrenceBehavior={handleSaveRecurrenceBehavior}
+              isModalOpen={isModalOpen}
+              modalDefaultDate={modalDefaultDate}
+              modalDefaultStartTime={modalDefaultStartTime}
+              modalDefaultEndTime={modalDefaultEndTime}
+              modalEditItem={modalEditItem}
+              onUpdateModalTimes={handleModalTimeChange}
+              onStartTask={handleStartTaskInFocus}
+              activeFocusTaskId={activeFocusTask?.id || null}
+              activeFocusTask={activeFocusTask}
+              isFocusRunning={isFocusRunning}
+              onNavigateToFocus={() => setActiveTab('focus')}
+              deviceType={effectiveDeviceType}
+            />
+          </div>
+
+          <div className={`flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 ${activeTab === 'focus' ? 'flex z-10' : 'hidden'}`}>
+            <FocusRoomView
+              task={activeFocusTask}
+              allTasks={tasks}
+              tags={tags}
+              userId={getActiveUserId()}
+              initialRoomCode={initialFocusRoomCode}
+              onCompleteTask={handleCompleteFocusTask}
+              onEndIncomplete={handleEndFocusIncomplete}
+              onTimerRunningChange={(running) => setIsFocusRunning(running)}
+              onSetSidebarCollapsed={setSidebarCollapsed}
+            />
+          </div>
+
+          <div className={`flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 ${activeTab === 'tasks' ? 'flex z-10' : 'hidden'}`}>
+            <TasksView
+              tasks={tasks}
+              groups={groups}
+              goals={goals}
+              onAddTask={handleAddTask}
+              onUpdateTask={handleUpdateTaskFields}
+              onDeleteTask={handleDeleteTask}
+              onOpenEditModal={handleOpenEditModal}
+              onOpenCreateModal={handleOpenCreateModal}
+              onAddGroup={handleAddGroup}
+              onDeleteGroup={handleDeleteGroup}
+              onUpdateGroup={handleUpdateGroup}
+              onToggleTaskStatus={handleToggleTaskStatus}
+              sidebarCollapsed={sidebarCollapsed}
+              setSidebarCollapsed={setSidebarCollapsed}
+              activeFocusTask={activeFocusTask}
+              isFocusRunning={isFocusRunning}
+              onNavigateToFocus={() => setActiveTab('focus')}
+            />
+          </div>
+
+          <div className={`flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 ${activeTab === 'goals' ? 'flex z-10' : 'hidden'}`}>
+            <GoalsView
+              goals={goals}
+              events={events}
+              tasks={tasks}
+              tags={tags}
+              groups={groups}
+              onAddGoal={handleAddGoal}
+              onUpdateGoal={handleUpdateGoal}
+              onDeleteGoal={handleDeleteGoal}
+              onToggleGoalComplete={handleToggleGoalComplete}
+              activeFocusTask={activeFocusTask}
+              isFocusRunning={isFocusRunning}
+              onNavigateToFocus={() => setActiveTab('focus')}
+            />
+          </div>
+
+          {/* Secondary Views rendered when active */}
+          {activeTab === 'insights' && (
+            <div className="flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 z-10 bg-slate-50 dark:bg-[#070A11]">
               <InsightsView
                 tasks={tasks}
                 events={events}
@@ -2185,18 +2188,30 @@ export default function App() {
                 goals={goals}
                 onNavigateToFocus={() => setActiveTab('focus')}
               />
-            ) : activeTab === 'about' ? (
+            </div>
+          )}
+
+          {activeTab === 'about' && (
+            <div className="flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 z-10 bg-slate-50 dark:bg-[#070A11]">
               <AboutView 
                 setActiveTab={setActiveTab} 
                 onOpenSignIn={() => setIsSignInModalOpen(true)}
                 currentUser={currentUser}
               />
-            ) : activeTab === 'privacy' || activeTab === 'terms' ? (
+            </div>
+          )}
+
+          {(activeTab === 'privacy' || activeTab === 'terms') && (
+            <div className="flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 z-10 bg-slate-50 dark:bg-[#070A11]">
               <LegalView
                 type={activeTab}
                 setActiveTab={setActiveTab}
               />
-            ) : activeTab === 'admin' ? (
+            </div>
+          )}
+
+          {activeTab === 'admin' && (
+            <div className="flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 z-10 bg-slate-50 dark:bg-[#070A11]">
               <AdminView
                 currentUser={currentUser}
                 adminPassword={adminPassword}
@@ -2214,7 +2229,11 @@ export default function App() {
                 onUnreadCountChange={setAdminUnreadCount}
                 onSetSidebarCollapsed={setSidebarCollapsed}
               />
-            ) : (
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="flex-1 flex flex-col h-full w-full overflow-hidden absolute inset-0 z-10 bg-slate-50 dark:bg-[#070A11]">
               <SettingsView
                 snapInterval={snapInterval}
                 onSaveSnapInterval={handleSaveSnapInterval}
@@ -2237,9 +2256,9 @@ export default function App() {
                 isFocusRunning={isFocusRunning}
                 onNavigateToFocus={() => setActiveTab('focus')}
               />
-            )}
-          </motion.div>
-        </AnimatePresence>
+            </div>
+          )}
+        </div>
       </main>
 
       {/* 3. Unified Create/Edit Event & Task Modal Dialog */}

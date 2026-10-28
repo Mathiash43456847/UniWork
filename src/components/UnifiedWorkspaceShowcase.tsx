@@ -33,7 +33,6 @@ function easeOutQuart(u: number): number {
 export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const triggerPointRef = useRef<HTMLDivElement | null>(null);
 
   // Direct element DOM refs for 60fps composite-thread updates
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -41,15 +40,8 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
 
   const [stageWidth, setStageWidth] = useState(700);
   const stageWidthRef = useRef(700);
-  const animFrameRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const lastFrameTimeRef = useRef<number | null>(null);
-  const isRunningRef = useRef(false);
-  const hasTriggeredRef = useRef(false);
-  const isInZoneRef = useRef(false);
-  const isHoveredRef = useRef(false);
 
-  // Four tools configured for Option C (4-Way Cardinal Blossom):
+  // Four tools configured for 4-Way Cardinal Blossom:
   // 0: Calendar -> West (Left, PI)
   // 1: Tasks -> North (Top, PI / 2)
   // 2: Targets -> South (Bottom, 3*PI / 2)
@@ -89,16 +81,11 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
     },
   ];
 
-  // Layout sizing metrics:
-  // Tab rectangles and words enlarged with generous, balanced margins on all sides (top, bottom, left, right)
-  // Gap between each tab is strictly constant and equal across all 4 tabs
-  // Center-to-center pitch = tabWidth + tabGap guarantees positive gap and zero overlap at all times
   const getLayoutMetrics = useCallback((stageW: number) => {
-    // Increased base width to 154px for Focus Room and uniform sizing
     let tabWidth = 154; 
     let tabGap = 12;    
     let Ry = 180;       
-    let spreadXDelta = 15; // Balanced bloom radius (Rx ≈ Ry)
+    let spreadXDelta = 15;
 
     if (stageW < 400) {
       tabWidth = Math.max(110, Math.floor((stageW - 28) / 4.1));
@@ -122,20 +109,15 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
       spreadXDelta = 15;
     }
 
-    // Critical: pitch MUST be tabWidth + tabGap.
     const pitch = tabWidth + tabGap;
-    // Normalized Rx for symmetrical blossom
     const Rx = 1.0 * pitch + spreadXDelta;
     return { tabWidth, tabGap, pitch, Rx, Ry, spreadXDelta };
   }, []);
 
-  // Compute starting resting slot X offset (centered row around X = 0)
-  // Indices: 0 (-1.5), 1 (-0.5), 2 (+0.5), 3 (+1.5)
   const getInitialSlotX = useCallback((idx: number, pitch: number) => {
     return (idx - 1.5) * pitch;
   }, []);
 
-  // Set initial lineup state on DOM with strictly uniform tab widths and identical spaces in between
   const applyInitialPositions = useCallback((stageW: number) => {
     const { tabWidth, pitch } = getLayoutMetrics(stageW);
     items.forEach((item, idx) => {
@@ -155,16 +137,14 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
     }
   }, [getLayoutMetrics, getInitialSlotX]);
 
-  // Responsive stage width listener adapted to actual stage canvas width
+  // Responsive stage width listener
   useEffect(() => {
     const updateDimensions = () => {
       if (typeof window === 'undefined') return;
       const stageW = stageRef.current ? stageRef.current.clientWidth : (window.innerWidth >= 1024 ? window.innerWidth * 0.55 : window.innerWidth - 32);
       setStageWidth(stageW);
       stageWidthRef.current = stageW;
-      if (!isRunningRef.current) {
-        applyInitialPositions(stageW);
-      }
+      applyInitialPositions(stageW);
     };
 
     updateDimensions();
@@ -182,22 +162,32 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
     };
   }, [applyInitialPositions]);
 
-  // 60fps cinematic physics loop:
-  // Phase 0 (0 to tRest): 1 full second wait so tabs are clearly registered before movement begins
-  // Phase 1 (tRest to tSpread): Tabs smoothly blossom outward into 4 cardinal points (N, S, E, W)
-  // Phase 2 (tSpread to tSmash): Accelerating inward vortex swirl and violent SMASH collision at center
-  // Phase 3 (tSmash to tLogoReveal): UniWork logo expands directly to full big size (monotonically, no shrink)
-  // Phase 4 (tLogoReveal to tHold): Confident brand hold on UniWork logo (paused if user hovers)
-  // Phase 5 (tHold to tCycleBack): Elegant dissolve & 4 tabs smoothly emerge from center back to horizontal lineup
-  // Phase 6 (tCycleBack to totalCycle): Tabs rest in row for 1 full second before next cycle automatically starts
-  const runAnimation = useCallback((immediate = false) => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-    }
+  // Scroll-driven animation controller
+  const updateScrollAnimation = useCallback(() => {
+    if (!stageRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+
+    // Calculate progress when reaching the 3/5 viewport mark of page 2, playing as user scrolls towards page 3
+    const startTrigger = vh * 0.6;
+    const endTrigger = vh * -0.4;
+    const currentTop = rect.top;
+    
+    let progress = (startTrigger - currentTop) / (startTrigger - endTrigger);
+    progress = Math.max(0, Math.min(1, progress));
+
+    const tRest = 0.04;
+    const tSpread = tRest + 1.15;
+    const tSmash = tSpread + 0.90;
+    const tLogoReveal = tSmash + 0.80;
+    const tHold = tLogoReveal + 1.20;
+    const tCycleBack = tHold + 0.70;
+    const totalCycle = tCycleBack + 1.00;
+
+    const t = progress * totalCycle;
 
     const { tabWidth, pitch, Rx: baseRx, Ry } = getLayoutMetrics(stageWidthRef.current);
 
-    // Compute live outward distance Rx bounded safely within stage width so tabs never clip the left text column or period
     let Rx = baseRx;
     if (stageRef.current && typeof window !== 'undefined') {
       const stageW = stageRef.current.clientWidth || stageWidthRef.current;
@@ -205,289 +195,168 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
       Rx = Math.min(baseRx, Math.max(1.5 * pitch + 10, maxAllowedRx));
     }
 
-    const tRest = immediate ? 0.04 : 1.00; // 1 full second wait before animation starts
-    const tSpread = tRest + 1.15;          // Outward cardinal glide (all 4 directions blossom outward)
-    const tSmash = tSpread + 0.90;         // Accelerating inward swirl & collision
-    const tLogoReveal = tSmash + 0.80;     // Logo expands smoothly straight to full big size (no overshoot/shrink)
-    const tHold = tLogoReveal + 3.20;      // 3.2s logo showcase hold
-    const tCycleBack = tHold + 0.70;       // Smooth dissolve & tabs emerge from center
-    const totalCycle = tCycleBack + 1.00;  // 1 full second rest on tabs in horizontal lineup before next cycle
+    const logoEl = logoRef.current;
 
-    startTimeRef.current = performance.now();
-    lastFrameTimeRef.current = performance.now();
-    isRunningRef.current = true;
-
-    const tick = (now: number) => {
-      if (!startTimeRef.current) return;
-
-      // If user hovers over the showcase, slow down animation (progress at 25% speed so users can read)
-      if (lastFrameTimeRef.current !== null) {
-        const delta = now - lastFrameTimeRef.current;
-        const timeScale = isHoveredRef.current ? 0.25 : 1.0;
-        startTimeRef.current += delta * (1 - timeScale);
+    if (t <= tRest) {
+      // Initial lineup
+      items.forEach((_, idx) => {
+        const el = itemRefs.current[idx];
+        if (!el) return;
+        const initX = getInitialSlotX(idx, pitch);
+        el.style.width = `${tabWidth}px`;
+        el.style.display = 'flex';
+        el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
+        el.style.opacity = '1';
+      });
+      if (logoEl) {
+        logoEl.style.display = 'none';
+        logoEl.style.opacity = '0';
+        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
       }
-      lastFrameTimeRef.current = now;
+    } else if (t <= tSpread) {
+      // Outward blossom into cardinal points
+      const u = (t - tRest) / (tSpread - tRest);
+      const eased = easeInOutCubic(u);
 
-      const t = (now - startTimeRef.current) / 1000;
-      const logoEl = logoRef.current;
+      items.forEach((item, idx) => {
+        const el = itemRefs.current[idx];
+        if (!el) return;
 
-      if (t <= tRest) {
-        // Phase 0: 1 full second initial wait with tabs clearly visible
-        items.forEach((_, idx) => {
-          const el = itemRefs.current[idx];
-          if (!el) return;
-          const initX = getInitialSlotX(idx, pitch);
-          el.style.width = `${tabWidth}px`;
-          el.style.display = 'flex';
-          el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
-          el.style.opacity = '1';
-        });
-        if (logoEl) {
-          logoEl.style.display = 'none';
-          logoEl.style.opacity = '0';
-          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+        const initX = getInitialSlotX(idx, pitch);
+        const baseAngle = item.baseAngle;
+
+        const targetBloomX = Rx * Math.cos(baseAngle);
+        const targetBloomY = -Ry * Math.sin(baseAngle);
+
+        const rowX = (1 - eased) * initX + eased * targetBloomX;
+        const rowY = eased * targetBloomY + Math.sin(u * Math.PI) * 18 * (idx % 2 === 0 ? 1 : -1);
+
+        el.style.display = 'flex';
+        el.style.transform = `translate3d(calc(-50% + ${rowX}px), calc(-50% + ${rowY}px), 0px) scale(1)`;
+        el.style.opacity = '1';
+      });
+
+      if (logoEl) {
+        logoEl.style.display = 'none';
+        logoEl.style.opacity = '0';
+        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+      }
+    } else if (t <= tSmash) {
+      // Inward swirl & smash collision
+      const u = (t - tSpread) / (tSmash - tSpread);
+      const easedPlunge = Math.pow(u, 1.75);
+      const currentRx = Rx * (1 - easedPlunge);
+      const currentRy = Ry * (1 - easedPlunge);
+
+      items.forEach((item, idx) => {
+        const el = itemRefs.current[idx];
+        if (!el) return;
+
+        const baseAngle = item.baseAngle;
+        const currentAngle = baseAngle + u * (Math.PI * 1.35);
+
+        const targetX = currentRx * Math.cos(currentAngle);
+        const targetY = -currentRy * Math.sin(currentAngle);
+        const scale = 1 - u * 0.15;
+        const opacity = u >= 0.94 ? Math.max(0, (1 - u) / 0.06) : 1;
+
+        el.style.display = 'flex';
+        el.style.transform = `translate3d(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px), 0px) scale(${scale})`;
+        el.style.opacity = `${opacity}`;
+      });
+
+      if (logoEl) {
+        logoEl.style.display = 'none';
+        logoEl.style.opacity = '0';
+        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+      }
+    } else if (t <= tLogoReveal) {
+      // UniWork logo reveal
+      items.forEach((_, idx) => {
+        const el = itemRefs.current[idx];
+        if (el) {
+          el.style.display = 'none';
+          el.style.opacity = '0';
         }
-      } else if (t <= tSpread) {
-        // Phase 1: Smooth outward blossom into cardinal points
-        // Left tab (Calendar) and Right tab (Focus Room) visibly move OUTWARD to -Rx and +Rx!
-        // Top tab (Tasks) and Bottom tab (Targets) move OUTWARD to -Ry and +Ry!
-        const u = (t - tRest) / (tSpread - tRest);
-        const eased = easeInOutCubic(u);
+      });
 
-        items.forEach((item, idx) => {
-          const el = itemRefs.current[idx];
-          if (!el) return;
+      if (logoEl) {
+        logoEl.style.display = 'flex';
+        const uLogo = Math.min(1, (t - tSmash) / (tLogoReveal - tSmash));
+        const easedLogoP = easeOutQuart(uLogo);
+        const logoOpacity = Math.min(1, uLogo * 2.8);
 
-          const initX = getInitialSlotX(idx, pitch);
-          const baseAngle = item.baseAngle;
-
-          const targetBloomX = Rx * Math.cos(baseAngle);
-          const targetBloomY = -Ry * Math.sin(baseAngle);
-
-          const rowX = (1 - eased) * initX + eased * targetBloomX;
-          const rowY = eased * targetBloomY + Math.sin(u * Math.PI) * 18 * (idx % 2 === 0 ? 1 : -1);
-
-          el.style.display = 'flex';
-          el.style.transform = `translate3d(calc(-50% + ${rowX}px), calc(-50% + ${rowY}px), 0px) scale(1)`;
-          el.style.opacity = '1';
-        });
-
-        if (logoEl) {
-          logoEl.style.display = 'none';
-          logoEl.style.opacity = '0';
-          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
+        logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${easedLogoP})`;
+        logoEl.style.opacity = `${logoOpacity}`;
+      }
+    } else if (t <= tHold) {
+      // Brand hold
+      items.forEach((_, idx) => {
+        const el = itemRefs.current[idx];
+        if (el) {
+          el.style.display = 'none';
+          el.style.opacity = '0';
         }
-      } else if (t <= tSmash) {
-        // Phase 2: Accelerating inward swirl and violent smash collision into center
-        const u = (t - tSpread) / (tSmash - tSpread);
-        const easedPlunge = Math.pow(u, 1.75);
-        const currentRx = Rx * (1 - easedPlunge);
-        const currentRy = Ry * (1 - easedPlunge);
+      });
 
-        items.forEach((item, idx) => {
-          const el = itemRefs.current[idx];
-          if (!el) return;
+      if (logoEl) {
+        logoEl.style.display = 'flex';
+        logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(1)';
+        logoEl.style.opacity = '1';
+      }
+    } else if (t <= tCycleBack) {
+      // Dissolve logo & emerge tabs
+      const u = (t - tHold) / (tCycleBack - tHold);
+      const eased = easeInOutCubic(u);
 
-          const baseAngle = item.baseAngle;
-          const currentAngle = baseAngle + u * (Math.PI * 1.35);
-
-          const targetX = currentRx * Math.cos(currentAngle);
-          const targetY = -currentRy * Math.sin(currentAngle);
-          const scale = 1 - u * 0.15;
-          // Tabs stay fully visible until the exact impact moment
-          const opacity = u >= 0.94 ? Math.max(0, (1 - u) / 0.06) : 1;
-
-          el.style.display = 'flex';
-          el.style.transform = `translate3d(calc(-50% + ${targetX}px), calc(-50% + ${targetY}px), 0px) scale(${scale})`;
-          el.style.opacity = `${opacity}`;
-        });
-
-        if (logoEl) {
-          logoEl.style.display = 'none';
-          logoEl.style.opacity = '0';
-          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(0)';
-        }
-      } else if (t <= tLogoReveal) {
-        // Phase 3: Exact collision impact triggers UniWork logo to expand to full big size (monotonically, no shrink)
-        items.forEach((_, idx) => {
-          const el = itemRefs.current[idx];
-          if (el) {
-            el.style.display = 'none';
-            el.style.opacity = '0';
-          }
-        });
-
-        if (logoEl) {
-          logoEl.style.display = 'flex';
-          const uLogo = Math.min(1, (t - tSmash) / (tLogoReveal - tSmash));
-          const easedLogoP = easeOutQuart(uLogo);
-          const logoOpacity = Math.min(1, uLogo * 2.8);
-
-          logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${easedLogoP})`;
-          logoEl.style.opacity = `${logoOpacity}`;
-        }
-      } else if (t <= tHold) {
-        // Phase 4: UniWork brand hold
-        items.forEach((_, idx) => {
-          const el = itemRefs.current[idx];
-          if (el) {
-            el.style.display = 'none';
-            el.style.opacity = '0';
-          }
-        });
-
-        if (logoEl) {
-          logoEl.style.display = 'flex';
-          logoEl.style.transform = 'translate3d(-50%, -50%, 0px) scale(1)';
-          logoEl.style.opacity = '1';
-        }
-      } else if (t <= tCycleBack) {
-        // Phase 5: Cinematic dissolve of logo while 4 tabs smoothly emerge from center
-        const u = (t - tHold) / (tCycleBack - tHold);
-        const eased = easeInOutCubic(u);
-
-        if (logoEl) {
-          logoEl.style.display = 'flex';
-          logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${1 - 0.15 * eased})`;
-          logoEl.style.opacity = `${1 - eased}`;
-        }
-
-        items.forEach((item, idx) => {
-          const el = itemRefs.current[idx];
-          if (!el) return;
-
-          const initX = getInitialSlotX(idx, pitch);
-          const currentX = initX * eased;
-          const currentScale = 0.88 + 0.12 * eased;
-
-          el.style.width = `${tabWidth}px`;
-          el.style.display = 'flex';
-          el.style.transform = `translate3d(calc(-50% + ${currentX}px), -50%, 0px) scale(${currentScale})`;
-          el.style.opacity = `${eased}`;
-        });
-      } else if (t <= totalCycle) {
-        // Phase 6: Tabs rest in lineup for 1 full second before next cycle begins
-        if (logoEl) {
-          logoEl.style.display = 'none';
-          logoEl.style.opacity = '0';
-        }
-
-        items.forEach((_, idx) => {
-          const el = itemRefs.current[idx];
-          if (!el) return;
-
-          const initX = getInitialSlotX(idx, pitch);
-          el.style.width = `${tabWidth}px`;
-          el.style.display = 'flex';
-          el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
-          el.style.opacity = '1';
-        });
+      if (logoEl) {
+        logoEl.style.display = 'flex';
+        logoEl.style.transform = `translate3d(-50%, -50%, 0px) scale(${1 - 0.15 * eased})`;
+        logoEl.style.opacity = `${1 - eased}`;
       }
 
-      // Continuous loop control
-      if (t >= totalCycle) {
-        if (isInZoneRef.current) {
-          // Tabs have already rested for 1 full second during Phase 6, so seamlessly transition directly into blossom
-          startTimeRef.current = performance.now() - (tRest * 1000);
-          lastFrameTimeRef.current = performance.now();
-          animFrameRef.current = requestAnimationFrame(tick);
-        } else {
-          isRunningRef.current = false;
-        }
-      } else {
-        animFrameRef.current = requestAnimationFrame(tick);
-      }
-    };
+      items.forEach((item, idx) => {
+        const el = itemRefs.current[idx];
+        if (!el) return;
 
-    animFrameRef.current = requestAnimationFrame(tick);
+        const initX = getInitialSlotX(idx, pitch);
+        const currentX = initX * eased;
+        const currentScale = 0.88 + 0.12 * eased;
+
+        el.style.width = `${tabWidth}px`;
+        el.style.display = 'flex';
+        el.style.transform = `translate3d(calc(-50% + ${currentX}px), -50%, 0px) scale(${currentScale})`;
+        el.style.opacity = `${eased}`;
+      });
+    } else {
+      // Rest in lineup
+      if (logoEl) {
+        logoEl.style.display = 'none';
+        logoEl.style.opacity = '0';
+      }
+
+      items.forEach((_, idx) => {
+        const el = itemRefs.current[idx];
+        if (!el) return;
+
+        const initX = getInitialSlotX(idx, pitch);
+        el.style.width = `${tabWidth}px`;
+        el.style.display = 'flex';
+        el.style.transform = `translate3d(calc(-50% + ${initX}px), -50%, 0px) scale(1)`;
+        el.style.opacity = '1';
+      });
+    }
   }, [getLayoutMetrics, getInitialSlotX]);
 
-  // Scroll trigger: triggers and loops ONLY when the animation focal point touches the middle zone
-  // (Viewport divided horizontally into 4 blocks; the 2 closest blocks in contact with the middle: 25% to 75%)
+  // Attach scroll listeners
   useEffect(() => {
     applyInitialPositions(stageWidthRef.current);
 
-    const getPointY = () => {
-      if (triggerPointRef.current) {
-        const r = triggerPointRef.current.getBoundingClientRect();
-        return r.top + r.height / 2;
-      }
-      if (stageRef.current) {
-        const r = stageRef.current.getBoundingClientRect();
-        return r.top + r.height / 2;
-      }
-      return null;
-    };
-
-    const checkZone = () => {
-      const pointY = getPointY();
-      if (pointY === null) return;
-
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-      // Viewport divided into 4 horizontal blocks:
-      // Block 1: 0% - 25% (Top block)
-      // Block 2: 25% - 50% (Upper middle block, touches middle line)
-      // Block 3: 50% - 75% (Lower middle block, touches middle line)
-      // Block 4: 75% - 100% (Bottom block)
-      // The 2 closest blocks in contact with the middle: 25% to 75% of viewport
-      const topQuarter = vh * 0.25;
-      const bottomQuarter = vh * 0.75;
-
-      const isTouchingMiddleZone = pointY >= topQuarter && pointY <= bottomQuarter;
-
-      if (isTouchingMiddleZone) {
-        isInZoneRef.current = true;
-        if (!isRunningRef.current) {
-          hasTriggeredRef.current = true;
-          runAnimation(false);
-        }
-      } else {
-        isInZoneRef.current = false;
-        // If the element has scrolled completely away from viewport, reset so it replays smoothly when scrolled back
-        if (stageRef.current) {
-          const stageRect = stageRef.current.getBoundingClientRect();
-          const isCompletelyOutOfView = stageRect.bottom < -50 || stageRect.top > vh + 50;
-          if (isCompletelyOutOfView && hasTriggeredRef.current && !isRunningRef.current) {
-            hasTriggeredRef.current = false;
-            applyInitialPositions(stageWidthRef.current);
-          }
-        }
-      }
-    };
-
-    // IntersectionObserver with rootMargin shrinking top and bottom by 25%
-    // so intersection happens strictly in the middle 2 quarters
-    let observer: IntersectionObserver | null = null;
-    const pointEl = triggerPointRef.current || stageRef.current;
-    if (pointEl && 'IntersectionObserver' in window) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              isInZoneRef.current = true;
-              if (!isRunningRef.current) {
-                hasTriggeredRef.current = true;
-                runAnimation(false);
-              }
-            } else {
-              isInZoneRef.current = false;
-            }
-          });
-        },
-        {
-          rootMargin: '-25% 0px -25% 0px',
-          threshold: 0,
-        }
-      );
-      observer.observe(pointEl);
-    }
-
-    // Passive scroll listeners on both window and custom scroll container
     let ticking = false;
     const onScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          checkZone();
+          updateScrollAnimation();
           ticking = false;
         });
         ticking = true;
@@ -502,32 +371,16 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
       scrollContainer.addEventListener('scroll', onScroll, { passive: true });
     }
 
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        isRunningRef.current = false;
-      } else {
-        checkZone();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    // Initial check on mount
-    checkZone();
+    updateScrollAnimation();
 
     return () => {
-      if (observer) observer.disconnect();
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (scrollContainer) {
         scrollContainer.removeEventListener('scroll', onScroll);
       }
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
     };
-  }, [applyInitialPositions, runAnimation]);
+  }, [applyInitialPositions, updateScrollAnimation]);
 
   const { tabWidth, pitch } = getLayoutMetrics(stageWidth);
 
@@ -537,10 +390,9 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
       id="one-workspace" 
       className="py-8 md:py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative"
     >
-      {/* 12-Column Responsive Grid: 5 cols for text copy, 7 cols for animation stage */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 xl:gap-20 items-center relative z-10">
         
-        {/* LEFT COLUMN: 5 columns */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-5 flex flex-col justify-center text-left">
           <h2 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[46px] font-extrabold text-white tracking-tight leading-[1.18]">
             Everything you need. <br />
@@ -554,22 +406,13 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
           </p>
         </div>
 
-        {/* RIGHT COLUMN: 7 columns (58.4% width) - Generous horizontal clearance so Focus Room never gets stuck at the side */}
+        {/* RIGHT COLUMN */}
         <div className="lg:col-span-7 flex flex-col items-center justify-center w-full min-w-0">
           <div 
             ref={stageRef}
-            onMouseEnter={() => { isHoveredRef.current = true; }}
-            onMouseLeave={() => { isHoveredRef.current = false; }}
             className="w-full relative min-h-[380px] sm:min-h-[420px] lg:min-h-[465px] flex items-center justify-center select-none overflow-visible"
           >
-            {/* Focal animation center point for viewport middle-zone scroll detection */}
-            <div
-              ref={triggerPointRef}
-              className="absolute top-1/2 left-1/2 w-2 h-2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 z-0"
-              aria-hidden="true"
-            />
-
-            {/* THE FOUR COMPONENT BUTTONS / NODES - Uniform length, strictly equal space, no overlap */}
+            {/* THE FOUR COMPONENT BUTTONS / NODES */}
             {items.map((item, idx) => {
               const Icon = item.icon;
               const initialSlotX = getInitialSlotX(idx, pitch);
@@ -596,7 +439,7 @@ export const UnifiedWorkspaceShowcase: React.FC<UnifiedWorkspaceShowcaseProps> =
               );
             })}
 
-            {/* CENTRAL REVEAL: PURE UNIWORK LOGO (NO CARD, NO GLOW, PROMINENT SCALE) */}
+            {/* CENTRAL REVEAL: PURE UNIWORK LOGO */}
             <div
               ref={logoRef}
               style={{

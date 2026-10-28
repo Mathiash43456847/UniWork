@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for fixing focus room sharing URLs and removing bots from custom focus rooms while keeping them in the global focus room.",
-  "updatedAt":  "2026-10-26T10:00:51.171391367Z",
+  "summary":  "Implementation plan for transforming the auto-looping 4-tabs showcase into a scroll-driven interactive transition where scrolling down causes the 4 tabs to blossom and form into UniWork.",
+  "updatedAt":  "2026-10-28T04:04:26.078095290Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
