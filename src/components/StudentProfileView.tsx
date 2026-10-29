@@ -13,9 +13,13 @@ export interface PeerProfile {
   points: number;
   status: 'studying' | 'break' | 'lunch';
   timeLeftMinutes: number;
-  timeLeftSeconds: number;
   studyDurationFormatted: string;
   isFixedTest?: boolean;
+  isBot?: boolean;
+  major?: string;
+  sessionStartedAtMs?: number;
+  plannedDurationSec?: number;
+  elapsedSeconds?: number;
 }
 
 interface StudentProfileViewProps {
@@ -31,8 +35,11 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Parse total planned duration in seconds from peer.studyDurationFormatted (e.g. "45 min" or "1h 15m")
+  // Parse total planned duration in seconds from peer.plannedDurationSec or studyDurationFormatted
   const plannedDurationSec = React.useMemo(() => {
+    if (peer.plannedDurationSec && peer.plannedDurationSec > 0) {
+      return peer.plannedDurationSec;
+    }
     if (!peer.studyDurationFormatted) return 25 * 60;
     const str = peer.studyDurationFormatted.toLowerCase();
     let totalSec = 0;
@@ -45,47 +52,57 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
       if (numOnly) totalSec = parseInt(numOnly[1], 10) * 60;
     }
     return totalSec > 0 ? totalSec : 25 * 60;
-  }, [peer.studyDurationFormatted]);
+  }, [peer.plannedDurationSec, peer.studyDurationFormatted]);
 
-  // Live ticking timer for time remaining & overtime tracking
-  const [liveSecondsLeft, setLiveSecondsLeft] = useState<number>(() => {
-    return peer.timeLeftSeconds > 0 ? peer.timeLeftSeconds : 0;
-  });
-  const [overtimeSeconds, setOvertimeSeconds] = useState<number>(() => {
-    return peer.timeLeftSeconds <= 0 ? Math.abs(peer.timeLeftSeconds) : 0;
-  });
-  const [isOvertime, setIsOvertime] = useState<boolean>(peer.timeLeftSeconds <= 0);
-
-  useEffect(() => {
-    if (peer.timeLeftSeconds > 0) {
-      setLiveSecondsLeft(peer.timeLeftSeconds);
-      setOvertimeSeconds(0);
-      setIsOvertime(false);
-    } else {
-      setLiveSecondsLeft(0);
-      setOvertimeSeconds(Math.abs(peer.timeLeftSeconds));
-      setIsOvertime(true);
+  // Persistent millisecond start timestamp - invariant across exits and re-entries
+  const sessionStartMs = React.useMemo(() => {
+    if (peer.sessionStartedAtMs && peer.sessionStartedAtMs > 0) {
+      try {
+        localStorage.setItem(`uniwork_peer_start_${peer.id}`, String(peer.sessionStartedAtMs));
+      } catch {}
+      return peer.sessionStartedAtMs;
     }
-  }, [peer.timeLeftSeconds, peer.id]);
+
+    try {
+      const saved = localStorage.getItem(`uniwork_peer_start_${peer.id}`);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed > 0 && Date.now() - parsed < 86400000) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    let initialElapsedSec = peer.elapsedSeconds || 0;
+    if (initialElapsedSec === 0 && peer.studyDurationFormatted) {
+      const str = peer.studyDurationFormatted.toLowerCase();
+      const hrsMatch = str.match(/(\d+)\s*h/);
+      const minsMatch = str.match(/(\d+)\s*m/);
+      if (hrsMatch) initialElapsedSec += parseInt(hrsMatch[1], 10) * 3600;
+      if (minsMatch) initialElapsedSec += parseInt(minsMatch[1], 10) * 60;
+    }
+
+    const start = Date.now() - (Math.max(10, initialElapsedSec) * 1000);
+    try {
+      localStorage.setItem(`uniwork_peer_start_${peer.id}`, String(start));
+    } catch {}
+    return start;
+  }, [peer.id, peer.sessionStartedAtMs, peer.elapsedSeconds, peer.studyDurationFormatted]);
+
+  // Live wall-clock tick: continuously increments without resetting
+  const [nowMs, setNowMs] = useState<number>(Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (isOvertime) {
-        setOvertimeSeconds((prev) => prev + 1);
-      } else {
-        setLiveSecondsLeft((prev) => {
-          if (prev > 1) {
-            return prev - 1;
-          } else {
-            setIsOvertime(true);
-            setOvertimeSeconds(0);
-            return 0;
-          }
-        });
-      }
+      setNowMs(Date.now());
     }, 1000);
     return () => clearInterval(timer);
-  }, [isOvertime]);
+  }, []);
+
+  const totalElapsedSeconds = Math.max(0, Math.floor((nowMs - sessionStartMs) / 1000));
+  const isOvertime = totalElapsedSeconds > plannedDurationSec;
+  const liveSecondsLeft = isOvertime ? 0 : Math.max(0, plannedDurationSec - totalElapsedSeconds);
+  const overtimeSeconds = isOvertime ? totalElapsedSeconds - plannedDurationSec : 0;
 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -130,8 +147,6 @@ export const StudentProfileView: React.FC<StudentProfileViewProps> = ({
 
   const otMins = Math.floor(overtimeSeconds / 60);
   const otSecs = overtimeSeconds % 60;
-
-  const totalElapsedSeconds = plannedDurationSec - liveSecondsLeft + overtimeSeconds;
 
   const formatTime = (totalSeconds: number): string => {
     const mins = Math.floor(totalSeconds / 60);
