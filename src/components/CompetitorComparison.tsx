@@ -596,17 +596,17 @@ export const CompetitorComparison: React.FC = () => {
   const activeTransform = transforms[activeAdjustLogoId] || { x: 0, y: 0, scale: 1 };
 
   return (
-    <section id="why-uniwork" className="section relative">
-      <div className="container">
-        {/* SECTION MAIN TITLE */}
-        <div className="text-center max-w-2xl mx-auto mb-16 relative">
-          <h2 className="text-h2 text-white">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
-              UniWork
-            </span>{' '}
-            vs Other Apps
-          </h2>
-        </div>
+    <section id="why-uniwork" className="section container relative font-sans">
+      
+      {/* SECTION MAIN TITLE (Clean, professional view without any mode indicator) */}
+      <div className="text-center max-w-2xl mx-auto mb-10 relative">
+        <h2 className="text-h2 font-extrabold tracking-tight leading-tight text-white font-['Plus_Jakarta_Sans']">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+            UniWork
+          </span>{' '}
+          vs Other Apps
+        </h2>
+      </div>
 
       {/* ADJUST MODE TOOLBAR (Appears ONLY when Shift + Tab + Q is pressed) */}
       {isAdjustMode && (
@@ -1012,10 +1012,10 @@ export const CompetitorComparison: React.FC = () => {
           
           {/* Sub-header & Sub-text Card Header with exact user text */}
           <div className="p-5 sm:p-6 border-b border-slate-800/80">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white tracking-tight mb-2">
+            <h3 className="text-h3 font-extrabold text-white tracking-tight mb-2">
               {currentCompetitor.subHeader}
             </h3>
-            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-normal">
+            <p className="text-body leading-relaxed font-normal">
               {currentCompetitor.subText}
             </p>
 
@@ -1091,8 +1091,9 @@ export const CompetitorComparison: React.FC = () => {
           </motion.div>
 
         </div>
+
       </div>
-    </div>
-  </section>
+
+    </section>
   );
 };

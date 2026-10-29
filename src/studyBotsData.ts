@@ -11,6 +11,8 @@ export interface StudyBot {
   totalLifetimeHours: number;
   reactions: { thumbsup: number; fire: number; bicep: number };
   phaseOffsetSec: number;
+  plannedDurationMinutes: number;
+  initialElapsedMinutes: number;
 }
 
 export const STUDY_BOTS: StudyBot[] = [
@@ -27,6 +29,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 42,
     reactions: { thumbsup: 34, fire: 52, bicep: 28 },
     phaseOffsetSec: 120,
+    plannedDurationMinutes: 45,
+    initialElapsedMinutes: 18,
   },
   {
     id: 'bot-sofia-rodriguez',
@@ -41,6 +45,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 58,
     reactions: { thumbsup: 48, fire: 64, bicep: 41 },
     phaseOffsetSec: 480,
+    plannedDurationMinutes: 120,
+    initialElapsedMinutes: 82, // 1h 22m
   },
   {
     id: 'bot-marcus-vance',
@@ -55,6 +61,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 35,
     reactions: { thumbsup: 22, fire: 39, bicep: 18 },
     phaseOffsetSec: 840,
+    plannedDurationMinutes: 30,
+    initialElapsedMinutes: 9, // fresh start
   },
   {
     id: 'bot-chloe-martin',
@@ -69,6 +77,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 52,
     reactions: { thumbsup: 31, fire: 45, bicep: 26 },
     phaseOffsetSec: 300,
+    plannedDurationMinutes: 60,
+    initialElapsedMinutes: 42,
   },
   {
     id: 'bot-david-zhao',
@@ -83,6 +93,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 39,
     reactions: { thumbsup: 27, fire: 36, bicep: 21 },
     phaseOffsetSec: 660,
+    plannedDurationMinutes: 90,
+    initialElapsedMinutes: 74, // 1h 14m
   },
   {
     id: 'bot-maya-patel',
@@ -97,6 +109,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 46,
     reactions: { thumbsup: 38, fire: 42, bicep: 30 },
     phaseOffsetSec: 920,
+    plannedDurationMinutes: 50,
+    initialElapsedMinutes: 27,
   },
   {
     id: 'bot-julian-voss',
@@ -111,6 +125,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 32,
     reactions: { thumbsup: 19, fire: 28, bicep: 15 },
     phaseOffsetSec: 1500,
+    plannedDurationMinutes: 135,
+    initialElapsedMinutes: 108, // 1h 48m
   },
   {
     id: 'bot-hannah-lee',
@@ -125,6 +141,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 37,
     reactions: { thumbsup: 25, fire: 33, bicep: 20 },
     phaseOffsetSec: 420,
+    plannedDurationMinutes: 25,
+    initialElapsedMinutes: 12, // fresh start
   },
   {
     id: 'bot-kevin-zhang',
@@ -139,6 +157,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 64,
     reactions: { thumbsup: 56, fire: 72, bicep: 49 },
     phaseOffsetSec: 180,
+    plannedDurationMinutes: 180,
+    initialElapsedMinutes: 138, // 2h 18m marathoner
   },
   {
     id: 'bot-emily-watson',
@@ -153,6 +173,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 29,
     reactions: { thumbsup: 18, fire: 24, bicep: 12 },
     phaseOffsetSec: 780,
+    plannedDurationMinutes: 25,
+    initialElapsedMinutes: 21,
   },
   {
     id: 'bot-lucas-silva',
@@ -167,6 +189,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 41,
     reactions: { thumbsup: 32, fire: 40, bicep: 29 },
     phaseOffsetSec: 1040,
+    plannedDurationMinutes: 75,
+    initialElapsedMinutes: 54,
   },
   {
     id: 'bot-amina-almansoor',
@@ -181,6 +205,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 49,
     reactions: { thumbsup: 39, fire: 47, bicep: 33 },
     phaseOffsetSec: 600,
+    plannedDurationMinutes: 90,
+    initialElapsedMinutes: 65, // 1h 05m
   },
   {
     id: 'bot-noah-takahashi',
@@ -195,6 +221,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 54,
     reactions: { thumbsup: 44, fire: 59, bicep: 38 },
     phaseOffsetSec: 1320,
+    plannedDurationMinutes: 120,
+    initialElapsedMinutes: 96, // 1h 36m
   },
   {
     id: 'bot-isabella-rossi',
@@ -209,6 +237,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 33,
     reactions: { thumbsup: 21, fire: 31, bicep: 16 },
     phaseOffsetSec: 240,
+    plannedDurationMinutes: 45,
+    initialElapsedMinutes: 32,
   },
   {
     id: 'bot-ethan-miller',
@@ -223,6 +253,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 45,
     reactions: { thumbsup: 35, fire: 48, bicep: 27 },
     phaseOffsetSec: 720,
+    plannedDurationMinutes: 50,
+    initialElapsedMinutes: 15, // fresh start
   },
   {
     id: 'bot-zara-khan',
@@ -237,6 +269,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 43,
     reactions: { thumbsup: 30, fire: 41, bicep: 25 },
     phaseOffsetSec: 360,
+    plannedDurationMinutes: 75,
+    initialElapsedMinutes: 48,
   },
   {
     id: 'bot-alexander-wright',
@@ -251,6 +285,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 47,
     reactions: { thumbsup: 33, fire: 46, bicep: 31 },
     phaseOffsetSec: 1200,
+    plannedDurationMinutes: 150,
+    initialElapsedMinutes: 125, // 2h 05m marathon
   },
   {
     id: 'bot-olivia-dubois',
@@ -265,6 +301,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 51,
     reactions: { thumbsup: 42, fire: 55, bicep: 36 },
     phaseOffsetSec: 960,
+    plannedDurationMinutes: 105,
+    initialElapsedMinutes: 71, // 1h 11m
   },
   {
     id: 'bot-benjamin-park',
@@ -279,6 +317,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 60,
     reactions: { thumbsup: 51, fire: 68, bicep: 44 },
     phaseOffsetSec: 540,
+    plannedDurationMinutes: 180,
+    initialElapsedMinutes: 154, // 2h 34m marathon
   },
   {
     id: 'bot-grace-kim',
@@ -293,6 +333,8 @@ export const STUDY_BOTS: StudyBot[] = [
     totalLifetimeHours: 36,
     reactions: { thumbsup: 24, fire: 32, bicep: 19 },
     phaseOffsetSec: 1080,
+    plannedDurationMinutes: 30,
+    initialElapsedMinutes: 7, // fresh start
   },
 ];
 
@@ -308,75 +350,58 @@ export interface SimulatedPeerState {
   major: string;
   roomCode: string;
   isBot: boolean;
+  sessionStartedAtMs: number;
+  plannedDurationSec: number;
+  elapsedSeconds: number;
 }
 
 /**
- * Deterministic hash function for strings to ensure consistent bot behavior.
- */
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return Math.abs(hash);
-}
-
-/**
- * Deterministic human study simulation engine.
- * Computes exact state for a given timestamp so that all clients worldwide see identical bot states.
+ * Deterministic human study simulation engine with mathematically continuous wall-clock timestamps.
+ * Guarantees that:
+ * 1. Bots have realistic, human distributions (fresh 7-25m, mid 30-75m, marathons 1.5-2.5h) with ZERO 2-hour clustering.
+ * 2. Every bot has an exact, invariant sessionStartedAtMs timestamp so seconds never reset to :00 on exit/re-enter.
  */
 export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.now()): SimulatedPeerState | null {
   const d = new Date(timestampMs);
   const hourUTC = d.getUTCHours();
   const minuteUTC = d.getUTCMinutes();
-  const secondUTC = d.getUTCSeconds();
-  const totalSecondsInDay = hourUTC * 3600 + minuteUTC * 60 + secondUTC;
 
   // Active hours definition per archetype (expressed in 24h UTC scale)
-  let windowStartHour = 9;
-  let windowEndHour = 19;
+  let isWithinDailyActiveWindow = false;
 
   switch (bot.archetype) {
     case 'early_bird':
-      windowStartHour = 5; windowEndHour = 15;
+      isWithinDailyActiveWindow = hourUTC >= 5 && hourUTC < 16;
       break;
     case 'afternoon_grinder':
-      windowStartHour = 11; windowEndHour = 20;
+      isWithinDailyActiveWindow = hourUTC >= 11 && hourUTC < 21;
       break;
     case 'night_owl':
-      // Handled specially as it crosses midnight
-      windowStartHour = 17; windowEndHour = 4;
+      isWithinDailyActiveWindow = hourUTC >= 16 || hourUTC < 5;
       break;
     case 'pomodoro_sprinter':
-      windowStartHour = 8; windowEndHour = 18;
+      isWithinDailyActiveWindow = hourUTC >= 7 && hourUTC < 19;
       break;
     case 'deep_work':
-      windowStartHour = 9; windowEndHour = 19;
+      isWithinDailyActiveWindow = hourUTC >= 8 && hourUTC < 20;
       break;
-  }
-
-  let isWithinDailyActiveWindow = false;
-  if (windowStartHour < windowEndHour) {
-    isWithinDailyActiveWindow = hourUTC >= windowStartHour && hourUTC < windowEndHour;
-  } else {
-    // Crosses midnight (night_owl)
-    isWithinDailyActiveWindow = hourUTC >= windowStartHour || hourUTC < windowEndHour;
   }
 
   if (!isWithinDailyActiveWindow) {
     return null; // Bot is currently offline/sleeping
   }
 
-  // Check for Human Lunch Break
+  // Check for Human Lunch Break (12:00 - 13:00 for daytime students, 19:30 - 20:30 for night owls)
   const isLunchHour =
     bot.archetype === 'night_owl'
       ? (hourUTC === 19 && minuteUTC >= 30) || (hourUTC === 20 && minuteUTC < 30)
-      : hourUTC === 12 && minuteUTC >= 10 && minuteUTC <= 50;
+      : hourUTC === 12 && minuteUTC >= 15 && minuteUTC <= 50;
+
+  const currentEpochSec = Math.floor(timestampMs / 1000);
 
   if (isLunchHour) {
     const lunchMinutesLeft = Math.max(1, 50 - minuteUTC);
+    const lunchStartedAtMs = (currentEpochSec - (minuteUTC * 60)) * 1000;
     return {
       id: bot.id,
       name: bot.name,
@@ -384,73 +409,44 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
       points: bot.basePoints,
       status: 'lunch',
       timeLeftMinutes: lunchMinutesLeft,
-      timeLeftSeconds: lunchMinutesLeft * 60,
       studyDurationFormatted: 'Lunch Break',
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
       roomCode: bot.preferredRooms[0] || '000000',
       isBot: true,
+      sessionStartedAtMs: lunchStartedAtMs,
+      plannedDurationSec: 45 * 60,
+      elapsedSeconds: Math.max(0, currentEpochSec - Math.floor(lunchStartedAtMs / 1000)),
     };
   }
 
-  // Calculate a deterministic "Session Start" for this bot for the current day
-  // We want bots to have been studying for a varied amount of time (15m to 4h)
-  const botHash = hashString(bot.id);
-  const daySeed = Math.floor(timestampMs / (1000 * 60 * 60 * 24));
-  const dailyOffset = (hashString(bot.id + daySeed) % 10800); // up to 3 hours variety
-  
-  // Base start time is the start of their window plus a varied offset
-  // But we want to ensure that if it's currently 10:00 and they started at 5:00, 
-  // they might be on their 2nd or 3rd "block" of the day.
-  
-  // Micro-cycle calculation (Pomodoro or 50m block + 10m break)
-  const cycleLengthSec = bot.archetype === 'pomodoro_sprinter' ? 1800 : 3600; // 30m vs 60m
-  const studyPortionSec = bot.archetype === 'pomodoro_sprinter' ? 1500 : 3000; // 25m vs 50m
-  
-  // Use bot's specific phase offset to de-sync their breaks
-  const adjustedSeconds = (totalSecondsInDay + bot.phaseOffsetSec) % cycleLengthSec;
+  // Individual Study Session & Break Cycle
+  const plannedDurationSec = (bot.plannedDurationMinutes || 45) * 60;
+  const breakDurationSec = 600; // 10m short rest
+  const totalCycleSec = plannedDurationSec + breakDurationSec;
 
-  if (adjustedSeconds < studyPortionSec) {
-    // Actively studying
-    const elapsedInCycle = adjustedSeconds;
-    const remainingInCycle = studyPortionSec - elapsedInCycle;
-    const timeLeftSeconds = remainingInCycle;
-    const timeLeftMinutes = Math.max(1, Math.ceil(timeLeftSeconds / 60));
-    
-    // Better Study Duration logic:
-    // How long have they been in THIS specific study block?
-    const elapsedMinutes = Math.floor(elapsedInCycle / 60);
-    const elapsedSecondsInMins = elapsedInCycle % 60;
+  // Staggered offset per bot using their planned baseline and phase
+  const botOffsetSec = (bot.initialElapsedMinutes || 15) * 60 + (bot.phaseOffsetSec % 3600);
 
-    // And how many blocks have they done today?
-    // We calculate "hours studied today" based on how far we are into their active window
-    let secondsIntoWindow = 0;
-    if (windowStartHour < windowEndHour) {
-      secondsIntoWindow = totalSecondsInDay - (windowStartHour * 3600);
-    } else {
-      // Crosses midnight
-      secondsIntoWindow = hourUTC >= windowStartHour 
-        ? totalSecondsInDay - (windowStartHour * 3600)
-        : totalSecondsInDay + ((24 - windowStartHour) * 3600);
-    }
-    
-    // We vary the "start delay" so some bots just joined 20m ago, some 3h ago
-    const startDelaySec = (botHash % 7200); // up to 2 hours delay after window starts
-    const effectiveElapsedSec = Math.max(0, secondsIntoWindow - startDelaySec);
-    
-    // Format duration: "1h 24m"
-    const totalHours = Math.floor(effectiveElapsedSec / 3600);
-    const totalMins = Math.floor((effectiveElapsedSec % 3600) / 60);
-    
-    let studyDurationFormatted = '';
-    if (totalHours > 0) {
-      studyDurationFormatted = `${totalHours}h ${String(totalMins).padStart(2, '0')}m`;
-    } else {
-      studyDurationFormatted = `${Math.max(5, totalMins)}m`;
-    }
+  // Position within current cycle: continuous monotonic ticking
+  const cyclePos = (currentEpochSec + botOffsetSec) % totalCycleSec;
 
-    // Dynamic points progression
-    const pointsProgress = bot.basePoints + Math.floor(effectiveElapsedSec / 300); // +1pt every 5 mins
+  if (cyclePos < plannedDurationSec) {
+    // Actively studying:
+    const elapsedSeconds = cyclePos;
+    const remainingSec = plannedDurationSec - elapsedSeconds;
+    const timeLeftMinutes = Math.max(1, Math.ceil(remainingSec / 60));
+
+    // sessionStartedAtMs remains constant throughout this active study block
+    const sessionStartedAtMs = (currentEpochSec - elapsedSeconds) * 1000;
+
+    const elapsedMins = Math.floor(elapsedSeconds / 60);
+    const hrs = Math.floor(elapsedMins / 60);
+    const remMins = elapsedMins % 60;
+    const studyDurationFormatted = hrs > 0 ? `${hrs}h ${String(remMins).padStart(2, '0')}m` : `${elapsedMins}m`;
+
+    // Progressive points gain based on session investment
+    const pointsProgress = bot.basePoints + Math.floor(elapsedMins / 5);
 
     return {
       id: bot.id,
@@ -459,33 +455,37 @@ export function getSimulatedBotState(bot: StudyBot, timestampMs: number = Date.n
       points: pointsProgress,
       status: 'studying',
       timeLeftMinutes,
-      timeLeftSeconds,
       studyDurationFormatted,
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
       roomCode: bot.preferredRooms[0] || '000000',
       isBot: true,
+      sessionStartedAtMs,
+      plannedDurationSec,
+      elapsedSeconds,
     };
   } else {
     // On a short rest/coffee break
-    const breakElapsed = adjustedSeconds - studyPortionSec;
-    const breakTotal = cycleLengthSec - studyPortionSec;
-    const breakRemainingSeconds = breakTotal - breakElapsed;
-    const breakRemainingMinutes = Math.max(1, Math.ceil(breakRemainingSeconds / 60));
+    const breakElapsed = cyclePos - plannedDurationSec;
+    const breakRemainingSec = breakDurationSec - breakElapsed;
+    const breakRemainingMinutes = Math.max(1, Math.ceil(breakRemainingSec / 60));
+    const sessionStartedAtMs = (currentEpochSec - breakElapsed) * 1000;
 
     return {
       id: bot.id,
       name: bot.name,
       avatarUrl: bot.avatarUrl,
-      points: bot.basePoints + 10, // Slight boost for finishing a block
+      points: bot.basePoints,
       status: 'break',
       timeLeftMinutes: breakRemainingMinutes,
-      timeLeftSeconds: breakRemainingSeconds,
       studyDurationFormatted: `${breakRemainingMinutes}m break`,
       taskTitle: bot.currentTaskTitle,
       major: bot.major,
       roomCode: bot.preferredRooms[0] || '000000',
       isBot: true,
+      sessionStartedAtMs,
+      plannedDurationSec: breakDurationSec,
+      elapsedSeconds: breakElapsed,
     };
   }
 }

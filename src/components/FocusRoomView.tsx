@@ -61,9 +61,13 @@ export interface PeerProfile {
   points: number;
   status: 'studying' | 'break' | 'lunch';
   timeLeftMinutes: number;
-  timeLeftSeconds: number;
   studyDurationFormatted: string;
   isFixedTest?: boolean;
+  isBot?: boolean;
+  major?: string;
+  sessionStartedAtMs?: number;
+  plannedDurationSec?: number;
+  elapsedSeconds?: number;
 }
 
 export interface FocusRoomItem {
@@ -501,12 +505,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       name: b.name,
       avatarUrl: b.avatarUrl,
       points: b.points,
-      status: b.status as any,
+      status: b.status,
       timeLeftMinutes: b.timeLeftMinutes,
-      timeLeftSeconds: b.timeLeftSeconds,
       studyDurationFormatted: b.studyDurationFormatted,
       isBot: true,
       major: b.major,
+      sessionStartedAtMs: b.sessionStartedAtMs,
+      plannedDurationSec: b.plannedDurationSec,
+      elapsedSeconds: b.elapsedSeconds,
     }));
   });
   const [selectedPeer, setSelectedPeer] = useState<PeerProfile | null>(null);
@@ -520,12 +526,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         name: b.name,
         avatarUrl: b.avatarUrl,
         points: b.points,
-        status: b.status as any,
+        status: b.status,
         timeLeftMinutes: b.timeLeftMinutes,
-        timeLeftSeconds: b.timeLeftSeconds,
         studyDurationFormatted: b.studyDurationFormatted,
         isBot: true,
         major: b.major,
+        sessionStartedAtMs: b.sessionStartedAtMs,
+        plannedDurationSec: b.plannedDurationSec,
+        elapsedSeconds: b.elapsedSeconds,
       }));
       setPeers(mapped);
     }
@@ -608,6 +616,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
         if (existing) {
           setSelectedPeer(existing);
         } else {
+          const fallbackStart = Date.now() - (60 * 60 * 1000);
           setSelectedPeer({
             id: `peer-${studentName}`,
             name: studentName,
@@ -616,6 +625,9 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
             status: 'studying',
             timeLeftMinutes: 45,
             studyDurationFormatted: '1h 00m',
+            sessionStartedAtMs: fallbackStart,
+            plannedDurationSec: 105 * 60,
+            elapsedSeconds: 3600,
           });
         }
       } else if (code) {
@@ -669,12 +681,14 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
       name: b.name,
       avatarUrl: b.avatarUrl,
       points: b.points,
-      status: b.status as any,
+      status: b.status,
       timeLeftMinutes: b.timeLeftMinutes,
-      timeLeftSeconds: b.timeLeftSeconds,
       studyDurationFormatted: b.studyDurationFormatted,
       isBot: true,
       major: b.major,
+      sessionStartedAtMs: b.sessionStartedAtMs,
+      plannedDurationSec: b.plannedDurationSec,
+      elapsedSeconds: b.elapsedSeconds,
     }));
 
     if (isPreview) {
@@ -710,7 +724,7 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
     return () => clearInterval(interval);
   }, [fetchPeers]);
 
-  // Presence Heartbeat every 15s for active room
+  // Presence Heartbeat every 15s for active room with live 7-day rolling update
   useEffect(() => {
     if (isPreview || !isRunning || isLockMode || !activeRoomCode) return;
 
@@ -728,7 +742,19 @@ export const FocusRoomView: React.FC<FocusRoomViewProps> = ({
           elapsedSeconds,
           roomCode: activeRoomCode,
         }),
-      }).catch(() => {});
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.success && typeof data.rollingAverage === 'number') {
+          setUserStats(prev => ({
+            ...prev,
+            rollingAverage: data.rollingAverage,
+            totalLifetimeSessions: data.totalLifetimeSessions ?? prev.totalLifetimeSessions,
+            todayPoints: data.todayPoints ?? prev.todayPoints,
+          }));
+        }
+      })
+      .catch(() => {});
     };
 
     sendHeartbeat();

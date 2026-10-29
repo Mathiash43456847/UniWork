@@ -419,21 +419,20 @@ if (dbUrl) {
             recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
           CREATE INDEX IF NOT EXISTS idx_bot_status_log_bot_time ON uniwork_bot_status_log (bot_id, timestamp_ms);
-
-          CREATE TABLE IF NOT EXISTS uniwork_bot_active_sessions (
-            bot_id VARCHAR(100) PRIMARY KEY,
-            session_start_ms BIGINT NOT NULL,
-            planned_duration_sec INT NOT NULL,
-            room_code VARCHAR(10) NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'studying',
-            last_updated_ms BIGINT NOT NULL
-          );
+          ALTER TABLE uniwork_study_bots ADD COLUMN IF NOT EXISTS session_started_at_ms BIGINT;
+          ALTER TABLE uniwork_study_bots ADD COLUMN IF NOT EXISTS planned_duration_sec INT;
+          ALTER TABLE uniwork_study_bots ADD COLUMN IF NOT EXISTS current_status VARCHAR(50) DEFAULT 'studying';
         `);
 
         for (const bot of STUDY_BOTS) {
+          const simState = getSimulatedBotState(bot);
+          const startMs = simState ? simState.sessionStartedAtMs : Date.now();
+          const plannedSec = simState ? simState.plannedDurationSec : (bot.plannedDurationMinutes || 45) * 60;
+          const status = simState ? simState.status : 'studying';
+
           await client.query(
-            `INSERT INTO uniwork_study_bots (id, name, avatar_url, major, archetype, base_points, preferred_rooms, current_task_title, bio, total_lifetime_hours)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            `INSERT INTO uniwork_study_bots (id, name, avatar_url, major, archetype, base_points, preferred_rooms, current_task_title, bio, total_lifetime_hours, session_started_at_ms, planned_duration_sec, current_status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              ON CONFLICT (id) DO UPDATE SET
                name = EXCLUDED.name,
                avatar_url = EXCLUDED.avatar_url,
@@ -443,7 +442,10 @@ if (dbUrl) {
                preferred_rooms = EXCLUDED.preferred_rooms,
                current_task_title = EXCLUDED.current_task_title,
                bio = EXCLUDED.bio,
-               total_lifetime_hours = EXCLUDED.total_lifetime_hours`,
+               total_lifetime_hours = EXCLUDED.total_lifetime_hours,
+               session_started_at_ms = COALESCE(uniwork_study_bots.session_started_at_ms, EXCLUDED.session_started_at_ms),
+               planned_duration_sec = EXCLUDED.planned_duration_sec,
+               current_status = EXCLUDED.current_status`,
             [
               bot.id,
               bot.name,
@@ -455,6 +457,9 @@ if (dbUrl) {
               bot.currentTaskTitle,
               bot.bio,
               bot.totalLifetimeHours,
+              startMs,
+              plannedSec,
+              status,
             ]
           );
 
@@ -2292,7 +2297,6 @@ interface PresenceRecord {
   avatarUrl: string;
   points: number;
   timeLeftMinutes: number;
-  timeLeftSeconds?: number;
   elapsedSeconds: number;
   lastHeartbeatMs: number;
 }
@@ -2637,20 +2641,20 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
     avatarUrl = "https://api.dicebear.com/7.x/adventurer/svg?seed=student&backgroundColor=b6e3f4",
     points = 0,
     timeLeftMinutes = 25,
-    timeLeftSeconds = 1500,
     elapsedSeconds = 0,
     roomCode = "000000",
   } = req.body;
 
   const code = String(roomCode || "000000").trim();
   const now = Date.now();
+  let pointsEarnedThisInterval = 0;
 
   // 30-second live incremental points accrual during active study
   if (elapsedSeconds > 0) {
     const lastTick = userLastIncrementalPointMs.get(userId) || 0;
     if (now - lastTick >= 30000) {
       userLastIncrementalPointMs.set(userId, now);
-      const pointsEarned = 1;
+      pointsEarnedThisInterval = 1;
       const logId = `pt_inc_${now}_${Math.random().toString(36).substring(2, 6)}`;
       const nowIso = new Date().toISOString();
 
@@ -2659,7 +2663,7 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
         userId,
         plannedMinutes: 0.5,
         actualMinutes: 0.5,
-        pointsEarned,
+        pointsEarned: pointsEarnedThisInterval,
         completedAt: nowIso,
       });
 
@@ -2667,7 +2671,7 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
         pool.query(
           `INSERT INTO uniwork_focus_points_logs (id, user_id, task_id, planned_minutes, actual_minutes, points_earned, completed_at)
            VALUES ($1, $2, NULL, 0.5, 0.5, $3, CURRENT_TIMESTAMP)`,
-          [logId, userId, pointsEarned]
+          [logId, userId, pointsEarnedThisInterval]
         ).catch((err) => {
           console.warn("DB incremental points log error:", err);
         });
@@ -2675,13 +2679,57 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
     }
   }
 
+  // Calculate 7-day rolling window score and statistics
+  let rollingAverage = points;
+  let totalPoints = 0;
+  let todayPoints = 0;
+
+  if (pool) {
+    try {
+      const rollRes = await pool.query(
+        "SELECT SUM(points_earned) as sum_points FROM uniwork_focus_points_logs WHERE user_id = $1 AND completed_at >= NOW() - INTERVAL '7 days'",
+        [userId]
+      );
+      const sumPoints = parseInt(rollRes.rows[0]?.sum_points || "0", 10);
+      rollingAverage = Math.round(sumPoints / 7);
+
+      const totalPtsRes = await pool.query(
+        "SELECT SUM(points_earned) as total_points FROM uniwork_focus_points_logs WHERE user_id = $1",
+        [userId]
+      );
+      totalPoints = parseInt(totalPtsRes.rows[0]?.total_points || "0", 10);
+
+      const todayRes = await pool.query(
+        "SELECT SUM(points_earned) as sum_today FROM uniwork_focus_points_logs WHERE user_id = $1 AND completed_at >= (NOW() - INTERVAL '24 hours')",
+        [userId]
+      );
+      todayPoints = parseInt(todayRes.rows[0]?.sum_today || "0", 10);
+    } catch (err) {
+      console.warn("DB 7-day rolling points query error:", err);
+    }
+  } else {
+    const userLogs = inMemoryFocusPointsLogs.filter((l) => l.userId === userId);
+    totalPoints = userLogs.reduce((acc, l) => acc + l.pointsEarned, 0);
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentLogs = userLogs.filter((l) => new Date(l.completedAt).getTime() >= sevenDaysAgo);
+    const sumPoints = recentLogs.reduce((acc, l) => acc + l.pointsEarned, 0);
+    rollingAverage = Math.round(sumPoints / 7);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    todayPoints = userLogs
+      .filter((l) => new Date(l.completedAt).getTime() >= startOfToday.getTime())
+      .reduce((acc, l) => acc + l.pointsEarned, 0);
+  }
+
+  const effectivePoints = rollingAverage > 0 ? rollingAverage : (totalPoints > 0 ? totalPoints : points);
+
   const record: PresenceRecord = {
     userId,
     userName,
     avatarUrl,
-    points,
+    points: effectivePoints,
     timeLeftMinutes,
-    timeLeftSeconds,
     elapsedSeconds,
     lastHeartbeatMs: now,
   };
@@ -2693,7 +2741,13 @@ app.post("/api/focus/presence/heartbeat", async (req, res) => {
   }
   roomPresence.set(userId, record);
 
-  return res.json({ success: true });
+  return res.json({
+    success: true,
+    rollingAverage: effectivePoints,
+    totalPoints,
+    todayPoints,
+    pointsEarned: pointsEarnedThisInterval,
+  });
 });
 
 // GET /api/focus/room/peers - Get students actively studying in a Focus Room
@@ -2701,6 +2755,7 @@ app.get("/api/focus/room/peers", async (req, res) => {
   const currentUserId = String(req.query.userId || "usr-mathias-cheow-primary");
   const code = String(req.query.roomCode || "000000").trim();
   const threshold = Date.now() - 45000;
+  const now = Date.now();
 
   const peers: any[] = [];
   const roomPresence = inMemoryRoomPresence.get(code);
@@ -2717,94 +2772,35 @@ app.get("/api/focus/room/peers", async (req, res) => {
           name: p.userName,
           avatarUrl: p.avatarUrl,
           points: p.points,
-          status: (p.timeLeftSeconds || 0) < 0 ? 'overtime' : 'studying',
+          status: "studying",
           timeLeftMinutes: p.timeLeftMinutes,
-          timeLeftSeconds: p.timeLeftSeconds !== undefined ? p.timeLeftSeconds : p.timeLeftMinutes * 60,
-          elapsedSeconds: p.elapsedSeconds,
           studyDurationFormatted: durFmt,
+          sessionStartedAtMs: now - (p.elapsedSeconds * 1000),
+          plannedDurationSec: (p.timeLeftMinutes + Math.floor(p.elapsedSeconds / 60)) * 60,
+          elapsedSeconds: p.elapsedSeconds,
         });
       }
     }
   }
 
-  // Include active simulated study bots with persistence
-  if (code === '000000') {
-    const now = Date.now();
-    for (const bot of STUDY_BOTS) {
-      if (peers.some(p => p.id === bot.id)) continue;
-
-      // 1. Check Archetype Active Window (UTC)
-      const d = new Date(now);
-      const h = d.getUTCHours();
-      let active = false;
-      if (bot.archetype === 'early_bird') active = h >= 5 && h < 15;
-      else if (bot.archetype === 'afternoon_grinder') active = h >= 11 && h < 20;
-      else if (bot.archetype === 'night_owl') active = h >= 17 || h < 4;
-      else if (bot.archetype === 'pomodoro_sprinter') active = h >= 8 && h < 18;
-      else if (bot.archetype === 'deep_work') active = h >= 9 && h < 19;
-
-      if (!active) continue;
-
-      // 2. Persistent Session Management
-      let botSession: any = null;
-      if (pool) {
-        try {
-          const res = await pool.query("SELECT * FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
-          if (res.rows.length > 0) {
-            botSession = res.rows[0];
-            const elapsed = Math.floor((now - Number(botSession.session_start_ms)) / 1000);
-            
-            // If session expired (over 4 hours or past planned duration + 15m), reset/re-randomize
-            if (elapsed > Number(botSession.planned_duration_sec) + 900 || elapsed > 14400) {
-              await pool.query("DELETE FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
-              botSession = null;
-            }
-          }
-
-          if (!botSession) {
-            // Create new random persistent session
-            // Random start time between 5m and 120m ago
-            const jitterStartMs = now - (Math.floor(Math.random() * 115 * 60 * 1000) + 300000);
-            const plannedSec = Math.floor(Math.random() * (7200 - 2700 + 1)) + 2700; // 45m to 2h
-            await pool.query(
-              "INSERT INTO uniwork_bot_active_sessions (bot_id, session_start_ms, planned_duration_sec, room_code, status, last_updated_ms) VALUES ($1, $2, $3, $4, $5, $6)",
-              [bot.id, jitterStartMs, plannedSec, '000000', 'studying', now]
-            );
-            const res2 = await pool.query("SELECT * FROM uniwork_bot_active_sessions WHERE bot_id = $1", [bot.id]);
-            botSession = res2.rows[0];
-          }
-        } catch (err) {
-          console.warn("Bot session DB error:", err);
-        }
-      }
-
-      // 3. Calculate State
-      if (botSession) {
-        const startMs = Number(botSession.session_start_ms);
-        const plannedSec = Number(botSession.planned_duration_sec);
-        const elapsedSec = Math.floor((now - startMs) / 1000);
-        const remainingSec = plannedSec - elapsedSec;
-        
-        // Correct planned duration string for UI parsing
-        const p_hrs = Math.floor(plannedSec / 3600);
-        const p_mins = Math.floor((plannedSec % 3600) / 60);
-        const plannedFmt = p_hrs > 0 ? `${p_hrs}h ${p_mins}m` : `${p_mins}m`;
-
-        peers.push({
-          id: bot.id,
-          name: bot.name,
-          avatarUrl: bot.avatarUrl,
-          points: bot.basePoints + Math.floor(elapsedSec / 60),
-          status: remainingSec < 0 ? 'overtime' : 'studying',
-          timeLeftMinutes: Math.max(0, Math.ceil(remainingSec / 60)),
-          timeLeftSeconds: remainingSec, // Allow negative here for StudentProfileView to calculate overtime
-          elapsedSeconds: elapsedSec,
-          plannedDurationSec: plannedSec,
-          studyDurationFormatted: plannedFmt, // Should be planned time
-          isBot: true,
-          major: bot.major,
-        });
-      }
+  // Include active simulated study bots with exact continuous start timestamps
+  const activeBots = getActiveBotsForRoom(code);
+  for (const bot of activeBots) {
+    if (!peers.some(p => p.id === bot.id)) {
+      peers.push({
+        id: bot.id,
+        name: bot.name,
+        avatarUrl: bot.avatarUrl,
+        points: bot.points,
+        status: bot.status,
+        timeLeftMinutes: bot.timeLeftMinutes,
+        studyDurationFormatted: bot.studyDurationFormatted,
+        isBot: true,
+        major: bot.major,
+        sessionStartedAtMs: bot.sessionStartedAtMs,
+        plannedDurationSec: bot.plannedDurationSec,
+        elapsedSeconds: bot.elapsedSeconds,
+      });
     }
   }
 

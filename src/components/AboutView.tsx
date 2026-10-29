@@ -685,24 +685,26 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
         </div>
       </div>
 
-      <div className="pb-24 w-full">
+      <div className="pb-24 overflow-x-hidden w-full">
             {/* HERO SECTION */}
-            <section id="about-hero" className="relative min-h-[100dvh] flex flex-col justify-between items-center bg-gradient-to-b from-[#0a0e1a] via-[#0d1326] to-[#0a0e1a] border-b border-white/[0.08] py-8">
+            <section id="about-hero" className="relative overflow-x-hidden md:min-h-[100dvh] flex flex-col gap-10 md:gap-0 md:justify-between items-center pt-28 md:pt-24 pb-8 md:pb-6 px-3 sm:px-6 md:px-8 border-b border-white/[0.08] bg-gradient-to-b from-[#0a0e1a] via-[#0d1326] to-[#0a0e1a]">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none" />
               
-              <div className="container relative z-10 flex-1 flex flex-col items-center justify-center text-center">
-                <div className="w-full flex flex-col items-center mb-8">
-                  <h1 className="w-full mb-6 text-hero">
+              {/* Vertically Centered Cluster */}
+              <div className="max-w-[1000px] w-full mx-auto text-center relative z-10 flex-1 flex flex-col justify-center items-center py-2 px-4 sm:px-6 my-auto">
+
+                <div className="w-full flex flex-col items-center">
+                  <h1 className="w-full tracking-[-0.03em] leading-[1.05] mb-0 text-center mx-auto">
                     <LiquidInkText text="Your Unified Workspace" />
                   </h1>
 
-                  <p className="text-body max-w-2xl mx-auto text-slate-300">
+                  <p className="text-slate-300 text-base sm:text-lg md:text-xl font-normal max-w-2xl mx-auto mt-3 sm:-mt-4 mb-4 text-center font-sans relative z-20 px-2">
                     Plan your day, stay focused and track your progress, all in one place.
                   </p>
                 </div>
 
                 {/* Primary CTA Button */}
-                <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
+                <div className="flex flex-wrap items-center justify-center gap-4 mb-4 mt-2 sm:mt-3">
                   {currentUser ? (
                     <button
                       onClick={() => setActiveTab('calendar')}
@@ -738,18 +740,18 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
               </div>
 
               {/* SKELETON WIREFRAME ICON PERSONA TICKER MARQUEE WITH EDGE GRADIENT MASK */}
-              <div className="w-full max-w-full overflow-hidden relative z-10 py-8">
-                <div className="relative overflow-hidden w-full [mask-image:linear-gradient(90deg,transparent_0%,black_15%,black_85%,transparent_100%)] [-webkit-mask-image:linear-gradient(90deg,transparent_0%,black_15%,black_85%,transparent_100%)]">
-                  <div className="animate-marquee hover:[animation-play-state:paused] flex items-center gap-12 sm:gap-20 whitespace-nowrap cursor-default px-12">
+              <div className="w-full max-w-6xl mx-auto flex items-center py-2 px-0 sm:px-3 relative z-10 mb-1">
+                <div className="relative overflow-hidden w-full flex-1 [mask-image:linear-gradient(90deg,transparent_0%,black_8%,black_92%,transparent_100%)] [-webkit-mask-image:linear-gradient(90deg,transparent_0%,black_8%,black_92%,transparent_100%)]">
+                  <div className="animate-marquee hover:[animation-play-state:paused] flex items-center gap-10 sm:gap-16 whitespace-nowrap cursor-default">
                     {[...PERSONA_ITEMS, ...PERSONA_ITEMS].map((persona, index) => {
                       const IconComp = persona.icon;
                       return (
                         <div
                           key={`${persona.id}-${index}`}
-                          className="inline-flex items-center gap-3 text-white/90 flex-shrink-0 text-sm tracking-[0.1em] font-sans font-bold uppercase py-2 select-none"
+                          className="inline-flex items-center gap-2.5 text-white/90 flex-shrink-0 text-[13px] tracking-[0.12em] font-sans font-['Plus_Jakarta_Sans',sans-serif] uppercase font-normal py-1 select-none"
                         >
-                          <IconComp className="w-5 h-5 text-cyan-400 stroke-[2]" />
-                          <span className="text-white/90">{persona.title}</span>
+                          <IconComp className="w-4 h-4 text-white/70 stroke-[1.5]" />
+                          <span className="text-white/90 font-normal text-[13px]">{persona.title}</span>
                         </div>
                       );
                     })}
@@ -758,14 +760,16 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
               </div>
 
               {/* SUBTLE EXPLORE UNIWORK CUE */}
-              <div className="w-full text-center pb-8 pt-4 relative z-10">
+              <div className="w-full text-center pb-3 pt-0 relative z-10">
                 <button
                   onClick={() => {
+                    const container = document.getElementById('uniwork-about-page');
                     const hero = document.getElementById('about-hero');
-                    const targetTop = hero ? hero.offsetHeight : window.innerHeight;
-                    window.scrollTo({ top: targetTop, behavior: 'smooth' });
+                    const targetTop = hero ? hero.offsetHeight : (container ? container.clientHeight : window.innerHeight);
+                    if (container) container.scrollTo({ top: targetTop, behavior: 'smooth' });
+                    else window.scrollTo({ top: targetTop, behavior: 'smooth' });
                   }}
-                  className="text-xs sm:text-[13px] font-bold text-slate-400 hover:text-cyan-400 tracking-widest transition-colors cursor-pointer inline-flex items-center gap-2 uppercase px-6 py-3"
+                  className="text-xs sm:text-[13px] font-medium text-slate-400 hover:text-cyan-400 tracking-wider transition-colors cursor-pointer inline-flex items-center gap-1.5 uppercase min-h-[44px] px-4"
                 >
                   <span>Explore UniWork</span>
                   <span className="text-cyan-400 animate-bounce">↓</span>
@@ -836,70 +840,73 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
             />
 
             {/* INTERACTIVE SYSTEM PREVIEW / LIVE EXPLORER */}
-            <section id="ui-visualizer" className="section relative">
-              <div className="container">
+            <section id="ui-visualizer" className="pb-16 pt-2 px-3 sm:px-4 md:px-8 max-w-6xl mx-auto">
 
-                {/* VIEW SWITCHER TABS - CLEAN SEGMENTED CONTROL */}
-                <div className="text-center mb-12">
-                  <div className="grid grid-cols-2 lg:flex lg:flex-wrap items-center justify-center p-2 rounded-3xl bg-slate-900/95 border border-slate-700/50 gap-2 shadow-[0_12px_40px_rgba(0,0,0,0.5)] relative z-20 w-full sm:w-auto">
-                    <button
-                      onClick={() => setPreviewTab('calendar')}
-                      className={`w-full sm:w-auto sm:min-w-[156px] min-h-[48px] justify-center px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                        previewTab === 'calendar'
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 ring-1 ring-blue-400/50'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <CalendarIcon className="w-5 h-5 text-blue-300" />
-                      <span>Calendar</span>
-                    </button>
+              {/* VIEW SWITCHER TABS - CLEAN SEGMENTED CONTROL */}
+              <div className="text-center mb-8 px-2">
+                <div className="grid grid-cols-2 sm:inline-flex sm:flex-wrap items-center justify-center p-1.5 rounded-2xl bg-slate-900/95 border border-slate-700/50 gap-2 shadow-[0_12px_40px_rgba(0,0,0,0.5)] relative z-20 w-full sm:w-auto">
+                  <button
+                    onClick={() => setPreviewTab('calendar')}
+                    className={`w-full sm:w-auto sm:min-w-[156px] min-h-[44px] justify-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      previewTab === 'calendar'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 ring-1 ring-blue-400/50'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <CalendarIcon className="w-4 h-4 text-blue-300" />
+                    <span className="sm:hidden">Calendar</span>
+                    <span className="hidden sm:inline">Calendar View</span>
+                  </button>
 
-                    <button
-                      onClick={() => setPreviewTab('tasks')}
-                      className={`w-full sm:w-auto sm:min-w-[156px] min-h-[48px] justify-center px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                        previewTab === 'tasks'
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400/50'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <CheckSquare className="w-5 h-5 text-indigo-300" />
-                      <span>Tasks</span>
-                    </button>
+                  <button
+                    onClick={() => setPreviewTab('tasks')}
+                    className={`w-full sm:w-auto sm:min-w-[156px] min-h-[44px] justify-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      previewTab === 'tasks'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400/50'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <CheckSquare className="w-4 h-4 text-indigo-300" />
+                    <span className="sm:hidden">Tasks</span>
+                    <span className="hidden sm:inline">Tasks View</span>
+                  </button>
 
-                    <button
-                      onClick={() => setPreviewTab('targets')}
-                      className={`w-full sm:w-auto sm:min-w-[156px] min-h-[48px] justify-center px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                        previewTab === 'targets'
-                          ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/30 ring-1 ring-cyan-400/50'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <Target className="w-5 h-5 text-cyan-300" />
-                      <span>Targets</span>
-                    </button>
+                  <button
+                    onClick={() => setPreviewTab('targets')}
+                    className={`w-full sm:w-auto sm:min-w-[156px] min-h-[44px] justify-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      previewTab === 'targets'
+                        ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/30 ring-1 ring-cyan-400/50'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Target className="w-4 h-4 text-cyan-300" />
+                    <span className="sm:hidden">Targets</span>
+                    <span className="hidden sm:inline">Targets View</span>
+                  </button>
 
-                    <button
-                      onClick={() => setPreviewTab('focus')}
-                      className={`w-full sm:w-auto sm:min-w-[156px] min-h-[48px] justify-center px-4 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                        previewTab === 'focus'
-                          ? 'bg-amber-600 text-white shadow-md shadow-amber-500/30 ring-1 ring-amber-400/50'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <AlarmClockCheck className="w-5 h-5 text-amber-300" />
-                      <span>Focus Room</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setPreviewTab('focus')}
+                    className={`w-full sm:w-auto sm:min-w-[156px] min-h-[44px] justify-center px-3 sm:px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      previewTab === 'focus'
+                        ? 'bg-amber-600 text-white shadow-md shadow-amber-500/30 ring-1 ring-amber-400/50'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <AlarmClockCheck className="w-4 h-4 text-amber-300" />
+                    <span className="sm:hidden">Focus Room</span>
+                    <span className="hidden sm:inline">Focus Room View</span>
+                  </button>
                 </div>
+              </div>
 
-                {/* STAGE CANVAS CONTAINING THE AUTHENTIC 1:1 REPLICAS WITH CONFINED WATERMARK */}
-                <div className="w-full aspect-[4/3] lg:aspect-video rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl relative overflow-hidden flex flex-col">
-                  {/* 45-degree Slanted Semi-Transparent Grey TEMPLATE Watermark Overlay */}
-                  <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
-                    <span className="text-slate-400/20 font-black text-6xl sm:text-8xl md:text-9xl tracking-[0.2em] select-none uppercase transform -rotate-45 font-sans drop-shadow-xs">
-                      TEMPLATE
-                    </span>
-                  </div>
+              {/* STAGE CANVAS CONTAINING THE AUTHENTIC 1:1 REPLICAS WITH CONFINED WATERMARK */}
+              <div className="w-full max-w-5xl mx-auto rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl relative overflow-hidden h-[540px] sm:h-[620px] flex flex-col">
+                {/* 45-degree Slanted Semi-Transparent Grey TEMPLATE Watermark Overlay */}
+                <div className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center overflow-hidden">
+                  <span className="text-slate-400/20 font-black text-5xl sm:text-8xl md:text-9xl tracking-[0.2em] select-none uppercase transform -rotate-45 font-sans drop-shadow-xs">
+                    TEMPLATE
+                  </span>
+                </div>
 
                 <AnimatePresence mode="wait">
                   
@@ -1326,8 +1333,7 @@ export default function AboutView({ setActiveTab, onOpenSignIn, currentUser }: A
                   )}
                 </AnimatePresence>
               </div>
-            </div>
-          </section>
+            </section>
 
             {/* Subtle Separator Line between Page 2 and Page 3 */}
             <div className="w-full max-w-5xl mx-auto px-4 my-10">

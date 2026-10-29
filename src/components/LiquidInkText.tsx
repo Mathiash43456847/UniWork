@@ -224,27 +224,18 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
       if (!displayCanvas || !container) return;
 
       const rect = container.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const width = rect.width;
-      
-      // Calculate dynamic font size based on container width (Proportional Fluidity)
-      // Base scaling: approx 7% of width, bounded by a reasonable min/max
-      const baseFontSize = Math.max(28, Math.min(88, width * 0.082));
-      const scaledFontSize = baseFontSize * dpr;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // 4K sharp resolution
+      const width = Math.max(rect.width, 300);
+      const height = Math.max(rect.height, 60);
 
-      displayCtx.font = `800 ${scaledFontSize}px "Open Sauce One", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif`;
-      const textMetrics = displayCtx.measureText(text);
-      
-      // Dynamic height based on font size and descent
-      const textHeight = baseFontSize * 1.2;
       const pixelWidth = Math.floor(width * dpr);
-      const pixelHeight = Math.floor(textHeight * dpr);
+      const pixelHeight = Math.floor(height * dpr);
 
       if (displayCanvas.width !== pixelWidth || displayCanvas.height !== pixelHeight) {
         displayCanvas.width = pixelWidth;
         displayCanvas.height = pixelHeight;
         displayCanvas.style.width = `${width}px`;
-        displayCanvas.style.height = `${textHeight}px`;
+        displayCanvas.style.height = `${height}px`;
       }
 
       const elapsed = (performance.now() - startTime) / 1000;
@@ -269,6 +260,13 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
       // 2. Draw masked text in 2D Display Canvas
       displayCtx.clearRect(0, 0, pixelWidth, pixelHeight);
 
+      // Determine responsive font size to fit text perfectly
+      // Fluid font size matching the design system's hero clamp: clamp(2.5rem, 5vw + 1rem, 4.5rem)
+      // 1rem = 16px. Min: 40px, Max: 72px.
+      const fluidVal = (width * 0.05) + 16;
+      const baseFontSize = Math.max(36, Math.min(76, fluidVal));
+      const scaledFontSize = baseFontSize * dpr;
+
       displayCtx.save();
       displayCtx.textAlign = 'center';
       displayCtx.textBaseline = 'middle';
@@ -287,6 +285,7 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
       if (glCanvas) {
         displayCtx.drawImage(glCanvas, 0, 0, pixelWidth, pixelHeight);
       } else {
+        // High quality fallback gradient if WebGL is unavailable
         const grad = displayCtx.createLinearGradient(0, 0, pixelWidth, pixelHeight);
         grad.addColorStop(0, '#2E6BF6');
         grad.addColorStop(0.35, '#4D82FF');
@@ -296,6 +295,8 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
         displayCtx.fillRect(0, 0, pixelWidth, pixelHeight);
       }
 
+
+      // Reset composite operation
       displayCtx.globalCompositeOperation = 'source-over';
       displayCtx.restore();
 
@@ -314,11 +315,11 @@ export const LiquidInkText: React.FC<LiquidInkTextProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative inline-flex items-center justify-center w-full max-w-5xl mx-auto select-none ${className}`}
+      className={`relative inline-flex items-center justify-center w-full max-w-5xl mx-auto py-2 select-none ${className}`}
     >
       <canvas
         ref={displayCanvasRef}
-        className="block mx-auto max-w-full"
+        className="block mx-auto max-w-full drop-shadow-[0_0_40px_rgba(46,107,246,0.35)]"
       />
     </div>
   );
